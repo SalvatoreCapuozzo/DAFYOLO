@@ -29,7 +29,7 @@ def setup_local_dataset(target_class_name):
     # 2. Trigger the download via the YOLO engine directly
     print("\nChecking/Downloading the Pascal VOC dataset (~2GB). This may take a few minutes...")
     # This safely triggers the download and format conversion if VOC.yaml is missing locally
-    YOLO(model_name).train(data="VOC.yaml", epochs=0, imgsz=640)
+    YOLO(model_name).train(data="VOC.yaml", epochs=1, imgsz=640)
     
     # 3. Locate the downloaded dataset
     datasets_root = settings['datasets_dir']
@@ -138,19 +138,44 @@ def ssh_transfer(client_id, weights_path):
     
     # Upload weights
     remote_weights = f"{SERVER_UPLOAD_DIR}/{client_id}_weights.pt"
+    print(f"Uploading {weights_path} to {remote_weights}...")
     sftp.put(weights_path, remote_weights)
     
     # Upload metadata
     meta = {"client_id": client_id, "class_name": client_id.split('_')[1]}
-    with open("meta.json", "w") as f: json.dump(meta, f)
-    sftp.put("meta.json", f"{SERVER_UPLOAD_DIR}/{client_id}_meta.json")
+    with open("meta.json", "w") as f: 
+        json.dump(meta, f)
+        
+    remote_meta = f"{SERVER_UPLOAD_DIR}/{client_id}_meta.json"
+    print(f"Uploading metadata to {remote_meta}...")
+    sftp.put("meta.json", remote_meta)
     
     sftp.close()
     transport.close()
-    print("Transfer complete!")
+    print("Transfer complete! The server should process it shortly.")
 
-if __name__ == "__main__":
-    target_class = input("Enter the class to train on (e.g., 'person', 'car'): ").strip()
+def send_existing_weights():
+    """Standalone function to transfer already trained weights."""
+    target_class = input("\nEnter the class name you already trained (e.g., 'person', 'car'): ").strip()
+    client_id = f"client_{target_class}"
+    
+    # Construct the path where YOLO saved the weights during the previous run
+    best_weights = os.path.abspath(f"runs/detect/{client_id}/train/weights/best.pt")
+    
+    if os.path.exists(best_weights):
+        print(f"Found existing weights at: {best_weights}")
+        try:
+            ssh_transfer(client_id, best_weights)
+        except Exception as e:
+            print(f"\n❌ SSH Transfer failed. Check your server IP, user, password, and paths.")
+            print(f"Error details: {e}")
+    else:
+        print(f"\n❌ Could not find weights at {best_weights}.")
+        print("Are you sure you trained this class already? (Check your folder structure)")
+
+def train_and_send():
+    """The full pipeline: Extracts dataset, trains, and transfers."""
+    target_class = input("\nEnter the class to train on (e.g., 'person', 'car'): ").strip()
     yaml_path, client_id = setup_local_dataset(target_class)
     
     print(f"\nStarting YOLO26 Local Training for {client_id}...")
@@ -159,14 +184,29 @@ if __name__ == "__main__":
     # Using 3 epochs for a fast local simulation
     results = model.train(data=yaml_path, epochs=3, imgsz=640, project=client_id, name="train") 
     
-    best_weights = os.path.abspath(f"{client_id}/train/weights/best.pt")
+    best_weights = os.path.abspath(f"runs/detect/{client_id}/train/weights/best.pt")
     
     if os.path.exists(best_weights):
-        # We wrap SSH in a try/except so you can test local training even if SSH isn't set up yet
+        print("\n✅ Training complete! Preparing to send weights...")
         try:
             ssh_transfer(client_id, best_weights)
         except Exception as e:
-            print(f"SSH Transfer failed (Is your server running?): {e}")
-            print(f"Weights are saved locally at: {best_weights}")
+            print(f"\n❌ SSH Transfer failed (Is your server running?): {e}")
+            print(f"Your weights are safely saved locally at: {best_weights}")
+            print("You can try sending them again later using Option 2.")
     else:
-        print("Training failed to produce weights.")
+        print("\n❌ Failed to send weights.")
+
+if __name__ == "__main__":
+    print("=== DAFYOLO Federated Learning Client ===")
+    print("1. Train a new model and send weights to server")
+    print("2. Send EXISTING weights to server (skip training)")
+    
+    choice = input("Select an option (1 or 2): ").strip()
+    
+    if choice == '1':
+        train_and_send()
+    elif choice == '2':
+        send_existing_weights()
+    else:
+        print("Invalid choice. Exiting.")

@@ -2,82 +2,111 @@ import os
 import time
 import json
 import torch
+import torch.nn as nn
 from ultralytics import YOLO
 
 # --- Server Config ---
-UPLOAD_DIR = "/datadrive/DAFYOLO/uploads" # MUST MATCH CLIENT SCRIPT
+UPLOAD_DIR = "/datadrive/DAFYOLO/uploads" # Assuming this is your path based on logs
 GLOBAL_MODEL_DIR = "/datadrive/DAFYOLO/global_model"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(GLOBAL_MODEL_DIR, exist_ok=True)
 
 class FLServer:
     def __init__(self):
-        print("Initializing Global YOLO26 Model...")
-        self.global_model = YOLO("yolo26n.pt")
+        self.global_model = None
         self.registry = {} # e.g. {"person": 0, "car": 1}
         self.nc = 0
-        
-    def expand_head(self):
-        """Surgically expands the final classification layer for YOLO26 one-to-one head."""
-        # Note: YOLO internal structures vary. This targets the standard Detect/C2f layers.
-        # We find layers matching the old number of classes and expand them.
-        model_dict = self.global_model.model.state_dict()
-        
-        for name, param in model_dict.items():
-            if 'cv3' in name or 'cls' in name: # Target classification heads
-                if param.shape[0] == self.nc - 1: # It has the old number of classes
-                    new_shape = list(param.shape)
-                    new_shape[0] = self.nc
-                    new_param = torch.zeros(new_shape, device=param.device)
-                    
-                    # Copy old weights
-                    new_param[:self.nc-1] = param
-                    # Initialize new class weights randomly to break symmetry
-                    torch.nn.init.normal_(new_param[self.nc-1:], std=0.01)
-                    
-                    model_dict[name] = new_param
+        print("Server Initialized. Waiting for first client to define base architecture...")
 
-        # Update the model's internal class count
+    def _expand_classification_head(self):
+        """Dynamically expands the final YOLO Conv2d layers by 1 channel."""
+        print(f"Expanding PyTorch model head from {self.nc} classes to {self.nc + 1} classes...")
+        head = self.global_model.model.model[-1] # The Detect head
+        
+        for i in range(len(head.cv3)):
+            seq = head.cv3[i] # This is a sequence of layers for one feature map scale
+            last_idx = len(seq) - 1
+            last_layer = seq[last_idx]
+            
+            # Locate the actual Conv2d object
+            old_conv = last_layer if isinstance(last_layer, nn.Conv2d) else last_layer.conv
+                
+            new_conv = nn.Conv2d(
+                in_channels=old_conv.in_channels,
+                out_channels=self.nc + 1,
+                kernel_size=old_conv.kernel_size,
+                stride=old_conv.stride,
+                padding=old_conv.padding,
+                bias=(old_conv.bias is not None)
+            ).to(old_conv.weight.device)
+            
+            # Copy old weights and initialize the new channel
+            with torch.no_grad():
+                new_conv.weight[:self.nc] = old_conv.weight
+                nn.init.normal_(new_conv.weight[self.nc:], std=0.01) # Break symmetry
+                if old_conv.bias is not None:
+                    new_conv.bias[:self.nc] = old_conv.bias
+                    nn.init.zeros_(new_conv.bias[self.nc:])
+                    
+            # Inject the new layer back into the model
+            if isinstance(last_layer, nn.Conv2d):
+                seq[last_idx] = new_conv
+            else:
+                seq[last_idx].conv = new_conv
+                
+        # Update internal config variables
+        self.nc += 1
         self.global_model.model.nc = self.nc
-        self.global_model.model.names = {v: k for k, v in self.registry.items()}
-        self.global_model.model.load_state_dict(model_dict, strict=False)
 
     def merge_client(self, client_weights_path, class_name, alpha=0.5):
-        print(f"\nProcessing weights for class: {class_name}")
+        print(f"\n--- Processing Incoming Client: '{class_name}' ---")
         
+        # Scenario 1: First client ever. Adopt its model entirely.
+        if self.global_model is None:
+            print(f"First client detected! Initializing global model from '{class_name}'.")
+            self.global_model = YOLO(client_weights_path)
+            self.registry[class_name] = 0
+            self.nc = 1
+            self.global_model.model.names = {0: class_name}
+            self._save_model()
+            return
+
+        # Scenario 2: New class discovery
         if class_name not in self.registry:
             self.registry[class_name] = self.nc
-            self.nc += 1
-            if self.nc > 80: # YOLO26n starts with 80 classes, we only expand if we exceed base or if we stripped it
-                pass # For simplicity in this script, we assume standard merging. 
-                     # If starting from scratch (nc=1), expand_head() handles the tensor resizing.
-            print(f"Discovered new class '{class_name}'. Global ID: {self.registry[class_name]}")
-            
+            self.global_model.model.names[self.nc] = class_name
+            self._expand_classification_head()
+            print(f"Discovered new class '{class_name}'. Assigned Global ID: {self.registry[class_name]}")
+
+        target_id = self.registry[class_name]
+        print(f"Merging Client's Local ID 0 into Server's Global ID {target_id}...")
+        
         global_sd = self.global_model.model.state_dict()
         client_model = YOLO(client_weights_path)
         client_sd = client_model.model.state_dict()
         
-        target_id = self.registry[class_name]
-        
+        # Tensor Surgery
         for key in global_sd.keys():
             if key in client_sd:
-                if 'cv3' in key or 'cls' in key: # Classification layer
-                    # YOLO classification tensors are usually shaped [nc, channels, ...]
-                    # ONLY update the specific index for the class the client trained on
-                    if len(global_sd[key].shape) > 0 and global_sd[key].shape[0] > target_id:
-                        global_sd[key][target_id] = (
-                            (1 - alpha) * global_sd[key][target_id] + 
-                            alpha * client_sd[key][0] # Client only has 1 class, so it's at index 0
-                        )
-                else: # Backbone/Neck
-                    global_sd[key] = (1 - alpha) * global_sd[key] + alpha * client_sd[key]
-                    
+                # Is it the final classification layer we just expanded?
+                if 'cv3' in key and ('weight' in key or 'bias' in key) and global_sd[key].shape[0] == self.nc:
+                    # Client only trained on ID 0. Merge it into the server's target ID.
+                    global_sd[key][target_id] = (1 - alpha) * global_sd[key][target_id] + alpha * client_sd[key][0]
+                else:
+                    # Standard layers (Backbone, Neck, etc.)
+                    if global_sd[key].shape == client_sd[key].shape:
+                        global_sd[key] = (1 - alpha) * global_sd[key] + alpha * client_sd[key]
+                    else:
+                        print(f"⚠️ Warning: Unhandled shape mismatch on {key}")
+                        
         self.global_model.model.load_state_dict(global_sd)
-        
-        # Save the new global model
+        self._save_model()
+
+    def _save_model(self):
         out_path = os.path.join(GLOBAL_MODEL_DIR, "global_model.pt")
         self.global_model.save(out_path)
-        print(f"Global model updated and saved to {out_path}!")
+        print(f"✅ Global model updated and saved: {out_path}")
+        print(f"Current Global Classes: {self.registry}")
 
 def run_server():
     server = FLServer()
@@ -97,14 +126,11 @@ def run_server():
             weights_path = os.path.join(UPLOAD_DIR, weights_file)
             
             if os.path.exists(weights_path):
-                # We have both files!
                 server.merge_client(weights_path, meta['class_name'])
-                
-                # Cleanup so we don't process them again
                 os.remove(meta_path)
                 os.remove(weights_path)
                 
-        time.sleep(5) # Polling interval
+        time.sleep(5)
 
 if __name__ == "__main__":
     run_server()
