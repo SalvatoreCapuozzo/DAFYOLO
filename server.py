@@ -61,7 +61,6 @@ class FLServer:
     def merge_client(self, client_weights_path, class_name, alpha=0.5):
         print(f"\n--- Processing Incoming Client: '{class_name}' ---")
         
-        # Scenario 1: First client ever. Adopt its model entirely.
         if self.global_model is None:
             print(f"First client detected! Initializing global model from '{class_name}'.")
             self.global_model = YOLO(client_weights_path)
@@ -71,7 +70,6 @@ class FLServer:
             self._save_model()
             return
 
-        # Scenario 2: New class discovery
         if class_name not in self.registry:
             self.registry[class_name] = self.nc
             self.global_model.model.names[self.nc] = class_name
@@ -85,18 +83,23 @@ class FLServer:
         client_model = YOLO(client_weights_path)
         client_sd = client_model.model.state_dict()
         
-        # Tensor Surgery
+        # Protective Tensor Surgery
         for key in global_sd.keys():
             if key in client_sd:
-                # Is it the final classification layer we just expanded?
-                if 'cv3' in key and ('weight' in key or 'bias' in key) and global_sd[key].shape[0] == self.nc:
-                    # Client only trained on ID 0. Merge it into the server's target ID.
+                # 1. Classification Head (cv3) - Shapes WON'T match (Server has nc, Client has 1)
+                if 'cv3' in key and ('weight' in key or 'bias' in key) and global_sd[key].shape[0] == self.nc and client_sd[key].shape[0] == 1:
                     global_sd[key][target_id] = (1 - alpha) * global_sd[key][target_id] + alpha * client_sd[key][0]
-                else:
-                    # Standard layers (Backbone, Neck, etc.)
-                    if global_sd[key].shape == client_sd[key].shape:
-                        global_sd[key] = (1 - alpha) * global_sd[key] + alpha * client_sd[key]
+                
+                # 2. Standard Layers (Shapes MUST match)
+                elif global_sd[key].shape == client_sd[key].shape:
+                    # Bounding Box Head (cv2) & DFL layers - Highly sensitive to background penalization!
+                    if 'cv2' in key or 'dfl' in key:
+                        global_sd[key] = 0.9 * global_sd[key] + 0.1 * client_sd[key]
+                    # Shared Backbone / Neck
                     else:
+                        global_sd[key] = (1 - alpha) * global_sd[key] + alpha * client_sd[key]
+                else:
+                    if 'cv3' not in key: # Suppress warnings for cv3 since we handle it above
                         print(f"⚠️ Warning: Unhandled shape mismatch on {key}")
                         
         self.global_model.model.load_state_dict(global_sd)
