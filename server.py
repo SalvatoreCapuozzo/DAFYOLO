@@ -3,13 +3,18 @@ import time
 import json
 import torch
 import torch.nn as nn
+import shutil  # <-- Add this
+from datetime import datetime # <-- Add this
 from ultralytics import YOLO
 
 # --- Server Config ---
-UPLOAD_DIR = "/datadrive/DAFYOLO/uploads" # Assuming this is your path based on logs
+UPLOAD_DIR = "/datadrive/DAFYOLO/uploads" 
 GLOBAL_MODEL_DIR = "/datadrive/DAFYOLO/global_model"
+PROCESSED_DIR = "/datadrive/DAFYOLO/processed_models" # <-- Add this new vault
+
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(GLOBAL_MODEL_DIR, exist_ok=True)
+os.makedirs(PROCESSED_DIR, exist_ok=True) # <-- Create the vault
 
 class FLServer:
     def __init__(self):
@@ -114,6 +119,7 @@ class FLServer:
 def run_server():
     server = FLServer()
     print(f"Server listening for SSH uploads in {UPLOAD_DIR}...")
+    print(f"Successfully merged models will be archived in {PROCESSED_DIR}...")
     
     while True:
         files = os.listdir(UPLOAD_DIR)
@@ -121,19 +127,44 @@ def run_server():
         
         for meta_file in meta_files:
             meta_path = os.path.join(UPLOAD_DIR, meta_file)
-            with open(meta_path, 'r') as f:
-                meta = json.load(f)
+            
+            try:
+                with open(meta_path, 'r') as f:
+                    meta = json.load(f)
+            except json.JSONDecodeError:
+                # Sometimes the server reads the file right as SFTP is still writing it
+                # Skip it this second, it will read cleanly on the next loop iteration
+                continue
                 
-            client_id = meta['client_id']
+            client_id = meta.get('client_id')
+            class_name = meta.get('class_name')
+            
+            if not client_id or not class_name:
+                print(f"⚠️ Invalid meta file found: {meta_file}. Skipping.")
+                continue
+
             weights_file = f"{client_id}_weights.pt"
             weights_path = os.path.join(UPLOAD_DIR, weights_file)
             
+            # Check if the weight file has fully arrived
             if os.path.exists(weights_path):
-                server.merge_client(weights_path, meta['class_name'])
-                os.remove(meta_path)
-                os.remove(weights_path)
+                # 1. Merge the model
+                server.merge_client(weights_path, class_name)
                 
-        time.sleep(5)
+                # 2. Archive the files instead of deleting them!
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                
+                # Create unique archive names so clients can upload multiple times
+                archived_meta = os.path.join(PROCESSED_DIR, f"{client_id}_{timestamp}_meta.json")
+                archived_weights = os.path.join(PROCESSED_DIR, f"{client_id}_{timestamp}_weights.pt")
+                
+                # Move them to the vault
+                shutil.move(meta_path, archived_meta)
+                shutil.move(weights_path, archived_weights)
+                
+                print(f"📦 Archived {client_id} to the processed vault!")
+                
+        time.sleep(5) # Polling interval
 
 if __name__ == "__main__":
     run_server()

@@ -222,12 +222,18 @@ def train_and_send():
     print(f"\nStarting YOLO26 Local Training for {client_id}...")
     model = YOLO("yolo26n.pt")
     
-    # Using 3 epochs for a fast local simulation
-    #results = model.train(data=yaml_path, epochs=3, imgsz=640, project=client_id, name="train") 
-    project_dir = f"runs/detect/{client_id}"
-    results = model.train(data=yaml_path, epochs=1, imgsz=640, project=project_dir, name="train", freeze=12)
+    # We set project to the base folder, and name to client_id
+    # This natively creates the path: runs/detect/client_person/weights/best.pt
+    results = model.train(
+        data=yaml_path, 
+        epochs=1, 
+        imgsz=640, 
+        name=client_id,        # FIXED: Use client_id as the run name
+        freeze=12
+    )
     
-    best_weights = os.path.abspath(f"runs/detect/{client_id}/train/weights/best.pt")
+    # Construct the exact path YOLO just created
+    best_weights = os.path.abspath(f"runs/detect/{client_id}/weights/best.pt")
     
     if os.path.exists(best_weights):
         print("\n✅ Training complete! Preparing to send weights...")
@@ -238,7 +244,8 @@ def train_and_send():
             print(f"Your weights are safely saved locally at: {best_weights}")
             print("You can try sending them again later using Option 2.")
     else:
-        print("\n❌ Failed to send weights.")
+        print("\n❌ Failed to find weights at the expected path.")
+        print(f"Looked for: {best_weights}")
 
 def run_inference():
     """Lets the user choose a model (local or global) to run inference on an image."""
@@ -259,8 +266,8 @@ def run_inference():
             
     elif choice == '2':
         target_class = input("Enter the class name you trained locally (e.g., 'person', 'car'): ").strip()
-        client_id = f"runs/detect/client_{target_class}"
-        model_path = os.path.abspath(f"{client_id}/train/weights/best.pt")
+        client_id = f"client_{target_class}"
+        model_path = os.path.abspath(f"runs/detect/{client_id}/train/weights/best.pt")
         
         if not os.path.exists(model_path):
             print(f"\n❌ Error: Could not find locally trained weights at {model_path}.")
