@@ -6,6 +6,8 @@ import yaml
 from ultralytics import YOLO, settings
 from dotenv import load_dotenv
 from ultralytics.utils.downloads import download
+import torch
+from ultralytics.models.yolo.detect import DetectionTrainer
 
 load_dotenv()
 
@@ -19,41 +21,65 @@ SSH_PASSWORD = os.getenv("PASSWORD")
 SERVER_UPLOAD_DIR = "/datadrive/DAFYOLO/uploads" # (Path on the SSH server)
 SERVER_DOWNLOAD_DIR = "/datadrive/DAFYOLO/global_model"
 
-def setup_local_dataset(target_class_name):
-    # 1. Ensure the base YOLO model exists
+class FedProxTrainer(DetectionTrainer):
+    def __init__(self, overrides=None, _callbacks=None):
+        super().__init__(overrides=overrides, _callbacks=_callbacks)
+        self.mu = 0.05  # The Proximal Penalty Strength
+        self.global_weights_dict = {}
+        
+        # We use a built-in YOLO callback to capture the weights the moment training starts
+        def capture_global_weights(trainer):
+            trainer.global_weights_dict = {
+                name: param.clone().detach().to(trainer.device)
+                for name, param in trainer.model.named_parameters()
+            }
+            print(f"\n[FEDPROX] Activated! Proximal Penalty (mu) set to {trainer.mu}\n")
+            
+        self.add_callback("on_train_start", capture_global_weights)
+
+    def optimizer_step(self):
+        """Intercepts the optimizer to inject the FedProx mathematical penalty."""
+        
+        # YOLO uses Mixed Precision (AMP), meaning gradients are artificially scaled up.
+        # We must scale our penalty to match before adding it.
+        scale = self.scaler.get_scale()
+        
+        for name, param in self.model.named_parameters():
+            if param.grad is not None and name in self.global_weights_dict:
+                # 1. Fetch the frozen global baseline weight
+                global_w = self.global_weights_dict[name].to(param.device)
+                
+                # 2. Calculate the FedProx gradient: mu * (local_weight - global_weight)
+                proximal_grad = self.mu * (param.data - global_w)
+                
+                # 3. Add it directly to the YOLO gradient
+                param.grad.data.add_(proximal_grad * scale)
+
+        # Now we let the standard YOLO engine unscale, clip, and step the optimizer!
+        super().optimizer_step()
+
+def setup_local_dataset(target_class_name, max_images=None):
     model_name = "yolo26n.pt"
     if not os.path.exists(model_name):
-        print(f"Downloading base {model_name}...")
         download(f"https://github.com/ultralytics/assets/releases/download/v8.4.0/{model_name}")
 
-    # 2. Trigger the download via the YOLO engine directly
-    print("\nChecking/Downloading the Pascal VOC dataset (~2GB). This may take a few minutes...")
-    # This safely triggers the download and format conversion if VOC.yaml is missing locally
-    YOLO(model_name).train(data="VOC.yaml", epochs=1, imgsz=640)
-    
-    # 3. Locate the downloaded dataset
     datasets_root = settings['datasets_dir']
     base_dir = os.path.join(datasets_root, 'VOC')
-    
-    labels_dir = os.path.join(base_dir, 'labels', 'train') # sometimes it's train2012 or train2007
+    if not os.path.exists(base_dir):
+        try: YOLO(model_name).train(data="VOC.yaml", epochs=0, imgsz=640)
+        except Exception: pass
+            
+    labels_dir = os.path.join(base_dir, 'labels', 'train') 
     images_dir = os.path.join(base_dir, 'images', 'train')
-    
-    # Fallback checks if the folder structure is slightly different
     if not os.path.exists(labels_dir):
-        # Check if it split them into VOC2007 and VOC2012
         alt_labels_dir = os.path.join(base_dir, 'images', 'train2012')
         if os.path.exists(alt_labels_dir):
             labels_dir = os.path.join(base_dir, 'labels', 'train2012')
             images_dir = os.path.join(base_dir, 'images', 'train2012')
         else:
-            # Check just the base images folder
             labels_dir = os.path.join(base_dir, 'labels')
             images_dir = os.path.join(base_dir, 'images')
 
-    if not os.path.exists(labels_dir) or not os.path.exists(images_dir):
-        raise FileNotFoundError(f"Could not find VOC dataset folders. Looked in: {base_dir}")
-
-    # 4. Read VOC original class ID
     voc_classes = {
         0: 'aeroplane', 1: 'bicycle', 2: 'bird', 3: 'boat', 4: 'bottle',
         5: 'bus', 6: 'car', 7: 'cat', 8: 'chair', 9: 'cow',
@@ -66,65 +92,45 @@ def setup_local_dataset(target_class_name):
         if v.lower() == target_class_name.lower():
             original_id = k
             break
-            
-    if original_id is None:
-        valid_classes = ", ".join(voc_classes.values())
-        raise ValueError(f"Class '{target_class_name}' not found in Pascal VOC. Valid options: {valid_classes}")
 
-    # 5. Setup local client directories
     client_id = f"client_{target_class_name}"
     out_dir = os.path.abspath(f"./{client_id}_data")
+    if os.path.exists(out_dir): shutil.rmtree(out_dir)
+        
     out_img_dir = os.path.join(out_dir, "images", "train")
     out_lbl_dir = os.path.join(out_dir, "labels", "train")
-    
     os.makedirs(out_img_dir, exist_ok=True)
     os.makedirs(out_lbl_dir, exist_ok=True)
     
-    print(f"\nFiltering VOC images strictly for: '{target_class_name}' (Original ID: {original_id})...")
-    
     images_copied = 0
-    # Process every label file
     for label_file in os.listdir(labels_dir):
+        if max_images is not None and images_copied >= max_images: break
         if not label_file.endswith('.txt'): continue
         
-        with open(os.path.join(labels_dir, label_file), 'r') as f:
-            lines = f.readlines()
-            
+        with open(os.path.join(labels_dir, label_file), 'r') as f: lines = f.readlines()
         filtered = []
         for line in lines:
             if not line.strip(): continue
             try:
                 if int(line.split()[0]) == original_id:
                     parts = line.split()
-                    parts[0] = "0" # Force ID to 0 locally
+                    parts[0] = "0" # FORCED BACK TO 0
                     filtered.append(" ".join(parts) + "\n")
-            except ValueError:
-                pass
+            except ValueError: pass
                 
         if filtered:
             img_filename = label_file.replace('.txt', '.jpg')
             src_img = os.path.join(images_dir, img_filename)
-            
             if os.path.exists(src_img):
-                with open(os.path.join(out_lbl_dir, label_file), 'w') as f:
-                    f.writelines(filtered)
+                with open(os.path.join(out_lbl_dir, label_file), 'w') as f: f.writelines(filtered)
                 shutil.copy(src_img, os.path.join(out_img_dir, img_filename))
                 images_copied += 1
-            
-    print(f"Extraction complete! Found and copied {images_copied} valid images containing '{target_class_name}'.")
-    
-    if images_copied == 0:
-        raise ValueError(f"No images found. Ensure the VOC dataset downloaded correctly to {datasets_root}.")
 
-    # 6. Create YAML
     yaml_path = f"{client_id}.yaml"
     with open(yaml_path, 'w') as f:
         yaml.dump({
-            "path": out_dir, 
-            "train": "images/train", 
-            "val": "images/train", 
-            "nc": 1, 
-            "names": {0: target_class_name}
+            "path": out_dir, "train": "images/train", "val": "images/train", 
+            "nc": 1, "names": {0: target_class_name} # FORCED BACK TO 1 CLASS
         }, f, sort_keys=False)
                    
     return yaml_path, client_id
@@ -160,7 +166,7 @@ def send_existing_weights():
     client_id = f"client_{target_class}"
     
     # Construct the path where YOLO saved the weights during the previous run
-    best_weights = os.path.abspath(f"runs/detect/{client_id}/train/weights/best.pt")
+    best_weights = os.path.abspath(f"runs/detect/{client_id}/weights/best.pt")
     
     if os.path.exists(best_weights):
         print(f"Found existing weights at: {best_weights}")
@@ -217,22 +223,33 @@ def download_and_inspect_global_model():
 def train_and_send():
     """The full pipeline: Extracts dataset, trains, and transfers."""
     target_class = input("\nEnter the class to train on (e.g., 'person', 'car'): ").strip()
-    yaml_path, client_id = setup_local_dataset(target_class)
     
-    print(f"\nStarting YOLO26 Local Training for {client_id}...")
-    model = YOLO("yolo26n.pt")
+    limit_input = input("How many images do you want to use? (Type a number, or press Enter for ALL): ").strip()
+    max_images = int(limit_input) if limit_input.isdigit() else None
     
-    # We set project to the base folder, and name to client_id
-    # This natively creates the path: runs/detect/client_person/weights/best.pt
-    results = model.train(
-        data=yaml_path, 
-        epochs=1, 
-        imgsz=640, 
-        name=client_id,        # FIXED: Use client_id as the run name
-        freeze=12
+    epochs_input = input("How many epochs do you want to train for? (Press Enter for default: 20): ").strip()
+    num_epochs = int(epochs_input) if epochs_input.isdigit() else 20
+    
+    yaml_path, client_id = setup_local_dataset(target_class, max_images=max_images)
+    
+    print(f"\nStarting Custom FedProx Local Training for {client_id} for {num_epochs} epochs...")
+    
+    # Pack the training arguments
+    args = dict(
+        model="yolo26n.pt",
+        data=yaml_path,
+        epochs=num_epochs,
+        imgsz=640,
+        name=client_id,
+        freeze=23,
+        seed=42,               
+        deterministic=True 
     )
     
-    # Construct the exact path YOLO just created
+    # Launch your custom FedProx engine!
+    trainer = FedProxTrainer(overrides=args)
+    trainer.train()
+    
     best_weights = os.path.abspath(f"runs/detect/{client_id}/weights/best.pt")
     
     if os.path.exists(best_weights):
@@ -242,7 +259,6 @@ def train_and_send():
         except Exception as e:
             print(f"\n❌ SSH Transfer failed (Is your server running?): {e}")
             print(f"Your weights are safely saved locally at: {best_weights}")
-            print("You can try sending them again later using Option 2.")
     else:
         print("\n❌ Failed to find weights at the expected path.")
         print(f"Looked for: {best_weights}")
@@ -267,7 +283,7 @@ def run_inference():
     elif choice == '2':
         target_class = input("Enter the class name you trained locally (e.g., 'person', 'car'): ").strip()
         client_id = f"client_{target_class}"
-        model_path = os.path.abspath(f"runs/detect/{client_id}/train/weights/best.pt")
+        model_path = os.path.abspath(f"runs/detect/{client_id}/weights/best.pt")
         
         if not os.path.exists(model_path):
             print(f"\n❌ Error: Could not find locally trained weights at {model_path}.")
@@ -355,7 +371,6 @@ def validate_and_compare():
         15: 'pottedplant', 16: 'sheep', 17: 'sofa', 18: 'train', 19: 'tvmonitor'
     }
     
-    # Map Global ID -> Original VOC ID
     global_to_voc = {}
     for g_id, g_name in global_names.items():
         for v_id, v_name in voc_classes.items():
@@ -367,13 +382,12 @@ def validate_and_compare():
     print("\nBuilding Joint Validation Dataset for fair comparison...")
     datasets_root = settings['datasets_dir']
     base_dir = os.path.join(datasets_root, 'VOC')
-    labels_dir = os.path.join(base_dir, 'labels', 'val') # Use VOC validation set
-    images_dir = os.path.join(base_dir, 'images', 'val')
+    labels_dir = os.path.join(base_dir, 'labels', 'val2012') 
+    images_dir = os.path.join(base_dir, 'images', 'val2012')
     
-    # Fallback to train if val doesn't exist (depending on VOC download structure)
     if not os.path.exists(labels_dir):
-        labels_dir = os.path.join(base_dir, 'labels', 'train')
-        images_dir = os.path.join(base_dir, 'images', 'train')
+        labels_dir = os.path.join(base_dir, 'labels', 'train2012')
+        images_dir = os.path.join(base_dir, 'images', 'train2012')
 
     val_dir = os.path.abspath("./global_val_data")
     out_img_dir = os.path.join(val_dir, "images", "val")
@@ -382,7 +396,6 @@ def validate_and_compare():
     os.makedirs(out_lbl_dir, exist_ok=True)
 
     images_copied = 0
-    # Process up to 500 images for a fast but statistically significant validation
     for label_file in os.listdir(labels_dir)[:500]:
         if not label_file.endswith('.txt'): continue
         
@@ -394,7 +407,6 @@ def validate_and_compare():
             if not line.strip(): continue
             try:
                 orig_id = int(line.split()[0])
-                # If this object is one of our global classes, rewrite it to the Global ID
                 for g_id, v_id in global_to_voc.items():
                     if orig_id == v_id:
                         parts = line.split()
@@ -425,45 +437,48 @@ def validate_and_compare():
     print("\n--- Evaluating GLOBAL Model ---")
     global_metrics = global_model.val(data=yaml_path, split='val', verbose=False)
     
-    # 4. Evaluate Local Model
-    local_class = input("\nEnter the class name you trained locally to compare (e.g., 'person'): ").strip()
-    client_id = f"runs/detect/client_{local_class}"
-    local_model_path = os.path.abspath(f"{client_id}/train/weights/best.pt")
-    local_yaml = f"client_{local_class}.yaml"
+    # 4. Evaluate MULTIPLE Local Models
+    local_classes_input = input("\nEnter the class names you trained locally to compare (comma-separated, e.g., 'person, car'): ").strip()
+    local_classes = [c.strip() for c in local_classes_input.split(',')] if local_classes_input else []
     
-    if os.path.exists(local_model_path) and os.path.exists(local_yaml):
-        print(f"\n--- Evaluating LOCAL Model ({local_class}) ---")
-        local_model = YOLO(local_model_path)
-        # We evaluate the local model on ITS OWN isolated validation set to show what it knows
-        local_metrics = local_model.val(data=local_yaml, split='val', verbose=False)
+    local_results = {}
+    for local_class in local_classes:
+        client_id = f"runs/detect/client_{local_class}"
+        local_model_path = os.path.abspath(f"{client_id}/weights/best.pt")
+        local_yaml = f"client_{local_class}.yaml"
         
-        # --- Print the Comparison ---
-        print("\n" + "="*50)
-        print("🏆 FEDERATED LEARNING METRICS COMPARISON 🏆")
-        print("="*50)
-        
+        if os.path.exists(local_model_path) and os.path.exists(local_yaml):
+            print(f"\n--- Evaluating LOCAL Model ({local_class}) ---")
+            local_model = YOLO(local_model_path)
+            local_metrics = local_model.val(data=local_yaml, split='val', verbose=False)
+            local_results[local_class] = local_metrics.box.map50
+        else:
+            print(f"\n❌ Local model or YAML for '{local_class}' not found. Skipping.")
+
+    # --- Print the Comparison ---
+    print("\n" + "="*50)
+    print("🏆 FEDERATED LEARNING METRICS COMPARISON 🏆")
+    print("="*50)
+    
+    for local_class, map50 in local_results.items():
         print(f"\n[ LOCAL MODEL ('{local_class}' only) ]")
-        print(f"  - Overall mAP@50:      {local_metrics.box.map50:.3f}")
+        print(f"  - Overall mAP@50:      {map50:.3f}")
         print(f"  - Classes Known:       1 ({local_class})")
         
-        print(f"\n[ GLOBAL MODEL (Merged Knowledge) ]")
-        print(f"  - Overall mAP@50:      {global_metrics.box.map50:.3f}")
-        print(f"  - Classes Known:       {len(global_names)}")
-        
-        print("\n[ GLOBAL MODEL Class Breakdown ]")
-        for i, class_name in global_names.items():
-            # YOLO metrics arrays are indexed by the classes present in the validation set
-            try:
-                # Find the index of this class in the metrics results
-                metric_idx = global_metrics.ap_class_index.tolist().index(i)
-                class_map50 = global_metrics.box.maps[metric_idx]
-                print(f"  - {class_name:<15}: mAP@50 = {class_map50:.3f}")
-            except ValueError:
-                print(f"  - {class_name:<15}: No instances found in validation sample.")
-                
-        print("="*50)
-    else:
-        print(f"\n❌ Local model or YAML for '{local_class}' not found. Skipping local comparison.")
+    print(f"\n[ GLOBAL MODEL (Merged Knowledge) ]")
+    print(f"  - Overall mAP@50:      {global_metrics.box.map50:.3f}")
+    print(f"  - Classes Known:       {len(global_names)}")
+    
+    print("\n[ GLOBAL MODEL Class Breakdown ]")
+    for i, class_name in global_names.items():
+        try:
+            metric_idx = global_metrics.ap_class_index.tolist().index(i)
+            class_map50 = global_metrics.box.maps[metric_idx]
+            print(f"  - {class_name:<15}: mAP@50 = {class_map50:.3f}")
+        except ValueError:
+            print(f"  - {class_name:<15}: No instances found in validation sample.")
+            
+    print("="*50)
 
 if __name__ == "__main__":
     while True:
