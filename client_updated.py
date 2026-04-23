@@ -13,10 +13,12 @@ from ultralytics.models.yolo.detect import DetectionTrainer
 
 load_dotenv()
 
-SERVER_IP = os.getenv("SERVER_IP")
 SSH_PORT = 22
-SSH_USER = os.getenv("USERNAME")
-SSH_PASSWORD = os.getenv("PASSWORD")
+# --- Change this section at the top of client_updated.py ---
+SERVER_IP = os.getenv("SERVER_IP", "").strip().replace('"', '').replace("'", "")
+SSH_USER = os.getenv("USERNAME", "").strip().replace('"', '').replace("'", "")
+SSH_PASSWORD = os.getenv("PASSWORD", "").strip().replace('"', '').replace("'", "")
+
 SERVER_UPLOAD_DIR = "/datadrive/DAFYOLO/uploads"
 SERVER_DOWNLOAD_DIR = "/datadrive/DAFYOLO/global_model"
 
@@ -24,6 +26,20 @@ LOCAL_MODELS_DIR = "runs/detect"
 DOWNLOADED_MODELS_DIR = "global_models"
 os.makedirs(DOWNLOADED_MODELS_DIR, exist_ok=True)
 
+def _ssh_connect():
+    """Robust SSH Connection helper to fix Authentication issues"""
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    ssh.connect(
+        hostname=SERVER_IP, 
+        port=SSH_PORT, 
+        username=SSH_USER, 
+        password=SSH_PASSWORD,
+        look_for_keys=False, # Ignore background SSH keys
+        allow_agent=False,   # Ignore SSH agents
+        timeout=15
+    )
+    return ssh
 
 # ==============================================================================
 # UNIFIED SMART TRAINER
@@ -81,20 +97,19 @@ def fetch_server_info():
     """Reads the server's broadcast to ensure the client configures itself correctly."""
     print(f"\n🔄 Connecting to {SERVER_IP} to handshake with server...")
     try:
-        transport = paramiko.Transport((SERVER_IP, SSH_PORT))
-        transport.connect(username=SSH_USER, password=SSH_PASSWORD)
-        sftp = paramiko.SFTPClient.from_transport(transport)
+        ssh = _ssh_connect()
+        sftp = ssh.open_sftp()
         
         try:
             sftp.get(f"{SERVER_DOWNLOAD_DIR}/server_info.json", "local_server_info.json")
             with open("local_server_info.json", "r") as f:
                 info = json.load(f)
             sftp.close()
-            transport.close()
+            ssh.close()
             return info
         except FileNotFoundError:
             sftp.close()
-            transport.close()
+            ssh.close()
             raise ValueError("Server is not running or hasn't initialized.")
     except Exception as e:
         print(f"❌ Handshake failed: {e}")
@@ -106,18 +121,18 @@ def download_global_model(strategy):
     local_path = os.path.join(DOWNLOADED_MODELS_DIR, f"global_model_{strategy}_{ts}.pt")
     
     try:
-        transport = paramiko.Transport((SERVER_IP, SSH_PORT))
-        transport.connect(username=SSH_USER, password=SSH_PASSWORD)
-        sftp = paramiko.SFTPClient.from_transport(transport)
+        ssh = _ssh_connect()
+        sftp = ssh.open_sftp()
         sftp.get(f"{SERVER_DOWNLOAD_DIR}/global_model.pt", local_path)
         sftp.close()
-        transport.close()
+        ssh.close()
         
         if os.path.getsize(local_path) < 1000:
             os.remove(local_path)
             return None
         return local_path
-    except Exception:
+    except Exception as e:
+        print(f"❌ Failed to download global model: {e}")
         return None
 
 def select_file_interactive(prompt_text, search_pattern):
@@ -373,16 +388,15 @@ def train_and_send():
 
 def ssh_transfer(client_id, weights_path, class_name):
     print(f"\nUploading {weights_path} to server...")
-    transport = paramiko.Transport((SERVER_IP, SSH_PORT))
-    transport.connect(username=SSH_USER, password=SSH_PASSWORD)
-    sftp = paramiko.SFTPClient.from_transport(transport)
+    ssh = _ssh_connect()
+    sftp = ssh.open_sftp()
     sftp.put(weights_path, f"{SERVER_UPLOAD_DIR}/{client_id}_weights.pt")
     
     meta = {"client_id": client_id, "class_name": class_name}
     with open("meta.json", "w") as f: json.dump(meta, f)
     sftp.put("meta.json", f"{SERVER_UPLOAD_DIR}/{client_id}_meta.json")
     sftp.close()
-    transport.close()
+    ssh.close()
     print("✅ Transfer complete!")
 
 def trigger_server_reset():
@@ -398,18 +412,14 @@ def trigger_server_reset():
             with open("CMD_RESET.json", "w") as f:
                 json.dump({"command": "reset", "timestamp": str(datetime.now())}, f)
 
-            # Upload it
-            transport = paramiko.Transport((SERVER_IP, SSH_PORT))
-            transport.connect(username=SSH_USER, password=SSH_PASSWORD)
-            sftp = paramiko.SFTPClient.from_transport(transport)
+            ssh = _ssh_connect()
+            sftp = ssh.open_sftp()
             sftp.put("CMD_RESET.json", f"{SERVER_UPLOAD_DIR}/CMD_RESET.json")
             sftp.close()
-            transport.close()
+            ssh.close()
             
-            # Clean up local trigger file
             os.remove("CMD_RESET.json")
             print("✅ Reset command sent! The server is now starting a fresh session.")
-            
         except Exception as e:
             print(f"❌ Failed to send reset command: {e}")
     else:

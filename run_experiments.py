@@ -7,13 +7,24 @@ import glob
 import shutil
 from datetime import datetime
 from ultralytics import YOLO, settings
+from dotenv import load_dotenv
 
-# Import our heavy-lifting functions from your existing client script
+# --- EXPLICIT .ENV LOADING ---
+# Force Python to find the .env file in the exact folder this script lives in
+script_dir = os.path.dirname(os.path.abspath(__file__))
+env_path = os.path.join(script_dir, '.env')
+load_dotenv(env_path)
+
+# Now it is safe to import from your client script
 from client_updated import (
     SERVER_IP, SSH_PORT, SSH_USER, SSH_PASSWORD, SERVER_UPLOAD_DIR,
     SmartFLTrainer, setup_local_dataset, ssh_transfer, fetch_server_info, download_global_model,
     LOCAL_MODELS_DIR, DOWNLOADED_MODELS_DIR
 )
+
+# --- SAFETY CHECK ---
+if not SERVER_IP or not SSH_USER or not SSH_PASSWORD:
+    raise ValueError(f"\n❌ CRITICAL: Missing credentials!\nSERVER_IP: {SERVER_IP}\nSSH_USER: {SSH_USER}\nCheck your .env file inside {script_dir}")
 
 # --- EXPERIMENT CONFIGURATION ---
 STRATEGIES = ['fedhead', 'stitch', 'ties', 'fedavg']
@@ -30,12 +41,22 @@ def trigger_server_reset_headless(strategy):
         with open("CMD_RESET.json", "w") as f:
             json.dump({"command": "reset", "strategy": strategy, "timestamp": str(datetime.now())}, f)
 
-        transport = paramiko.Transport((SERVER_IP, SSH_PORT))
-        transport.connect(username=SSH_USER, password=SSH_PASSWORD)
-        sftp = paramiko.SFTPClient.from_transport(transport)
+        # Robust SSH Client for Ubuntu/Linux
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(
+            hostname=SERVER_IP, 
+            port=SSH_PORT, 
+            username=SSH_USER, 
+            password=SSH_PASSWORD,
+            look_for_keys=False,
+            allow_agent=False,
+            timeout=15
+        )
+        sftp = ssh.open_sftp()
         sftp.put("CMD_RESET.json", f"{SERVER_UPLOAD_DIR}/CMD_RESET.json")
         sftp.close()
-        transport.close()
+        ssh.close()
         
         os.remove("CMD_RESET.json")
         print("✅ Command sent successfully.")

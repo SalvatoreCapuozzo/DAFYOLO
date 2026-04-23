@@ -267,21 +267,21 @@ def run_server():
         # --- 1. Hot Reset Listener (UPDATED FOR AUTOMATION) ---
         reset_cmd_path = os.path.join(UPLOAD_DIR, "CMD_RESET.json")
         if os.path.exists(reset_cmd_path):
-            print("\n🔄 Received RESET command from client. Starting fresh session...")
+            print("\n🔄 Received RESET command from client.")
             try:
                 with open(reset_cmd_path, 'r') as f:
                     cmd_data = json.load(f)
                 
-                # Check if the client requested a specific strategy for this run
+                # Remote Strategy Switching
                 if 'strategy' in cmd_data:
                     server.strategy = cmd_data['strategy']
                     print(f"🔀 Switched server strategy to: {server.strategy.upper()}")
             except Exception as e:
-                print(f"⚠️ Error reading reset command strategy: {e}")
+                print(f"⚠️ Error reading reset command: {e}")
 
             server.reset_session()
             try:
-                os.remove(reset_cmd_path) # Clean up the trigger file
+                os.remove(reset_cmd_path)
             except OSError:
                 pass
             time.sleep(2)
