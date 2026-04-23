@@ -1,5 +1,8 @@
 /.env
-runs/
+runs*
 datasets/
-client_*
 yolo*
+global_*
+client_person*
+client_car*
+client_bicycle*

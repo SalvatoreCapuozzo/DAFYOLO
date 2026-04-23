@@ -27,35 +27,44 @@ class FedProxTrainer(DetectionTrainer):
         self.mu = 0.05  # The Proximal Penalty Strength
         self.global_weights_dict = {}
         
-        # We use a built-in YOLO callback to capture the weights the moment training starts
-        def capture_global_weights(trainer):
+        def on_train_start_callback(trainer):
+            # 1. Capture baseline weights for FedProx
             trainer.global_weights_dict = {
                 name: param.clone().detach().to(trainer.device)
                 for name, param in trainer.model.named_parameters()
             }
             print(f"\n[FEDPROX] Activated! Proximal Penalty (mu) set to {trainer.mu}\n")
             
-        self.add_callback("on_train_start", capture_global_weights)
+            # 2. THE SURGICAL FREEZE (Linear Probing for Head-Stitching)
+            print("[SURGICAL FREEZE] Locking backbone, neck, and intermediate head layers...")
+            frozen_count = 0
+            unfrozen_count = 0
+            
+            for name, param in trainer.model.named_parameters():
+                # We strictly target the final 1x1 convolutions that output the classes
+                # In YOLOv8/v11, these are `.2.weight` and `.2.bias` inside cv3
+                if any(x in name for x in ['cv3.', 'one2one_cv3.']) and ('2.weight' in name or '2.bias' in name):
+                    param.requires_grad = True
+                    unfrozen_count += 1
+                    print(f"  🔓 UNFROZEN: {name}")
+                else:
+                    param.requires_grad = False
+                    frozen_count += 1
+                    
+            print(f"[SURGICAL FREEZE] Complete. Frozen: {frozen_count} tensors | Unfrozen: {unfrozen_count} tensors.\n")
+            
+        self.add_callback("on_train_start", on_train_start_callback)
 
     def optimizer_step(self):
         """Intercepts the optimizer to inject the FedProx mathematical penalty."""
-        
-        # YOLO uses Mixed Precision (AMP), meaning gradients are artificially scaled up.
-        # We must scale our penalty to match before adding it.
         scale = self.scaler.get_scale()
         
         for name, param in self.model.named_parameters():
             if param.grad is not None and name in self.global_weights_dict:
-                # 1. Fetch the frozen global baseline weight
                 global_w = self.global_weights_dict[name].to(param.device)
-                
-                # 2. Calculate the FedProx gradient: mu * (local_weight - global_weight)
                 proximal_grad = self.mu * (param.data - global_w)
-                
-                # 3. Add it directly to the YOLO gradient
                 param.grad.data.add_(proximal_grad * scale)
 
-        # Now we let the standard YOLO engine unscale, clip, and step the optimizer!
         super().optimizer_step()
 
 def setup_local_dataset(target_class_name, max_images=None):
