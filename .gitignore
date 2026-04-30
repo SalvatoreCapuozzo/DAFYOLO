@@ -6,3 +6,8 @@ global_*
 client_person*
 client_car*
 client_bicycle*
+client_node*
+automated*
+ISBI*.pdf
+__pycache__
+.vscode
