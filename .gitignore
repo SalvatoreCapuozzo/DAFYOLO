@@ -11,3 +11,4 @@ automated*
 ISBI*.pdf
 __pycache__
 .vscode
+fedyolo_system/data/

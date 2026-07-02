@@ -1,0 +1,73 @@
+global_classes:
+- strongili
+- eimeria_spp
+- fasciola
+- eimeria_intricata
+- calicophoron
+- dictyocaulus
+- nematodirus
+- dicrocoelium
+- metastrongili
+- trichuris
+- skrjabinema
+- toxocara
+- strongyloides
+- moniezia_expansa
+- moniezia_benedeni
+- capillaria
+- giardia
+- ascaris
+- ancylostoma
+- trichuris_trichiuria
+model:
+  arch: yolov8n.yaml
+  imgsz: 1024
+federation:
+  rounds: 20
+  local_epochs: 5
+  batch_size: 8
+  lr0: 0.0008
+  warmup_steps: 20
+  grad_clip: 10.0
+  workers: 0
+  device: cpu
+  pseudo_label:
+    enabled: true
+    start_round: 5
+    conf_thresh: 0.6
+    weight: 0.5
+nodes:
+- name: node_A
+  data_yaml: data/kfm_250423/node_A/data.yaml
+  owned_classes:
+  - eimeria_spp
+  - calicophoron
+  - trichuris
+  - moniezia_expansa
+- name: node_B
+  data_yaml: data/kfm_250423/node_B/data.yaml
+  owned_classes:
+  - fasciola
+  - metastrongili
+  - moniezia_benedeni
+  - trichuris_trichiuria
+- name: node_C
+  data_yaml: data/kfm_250423/node_C/data.yaml
+  owned_classes:
+  - strongili
+  - eimeria_intricata
+  - dictyocaulus
+  - nematodirus
+  - dicrocoelium
+  - skrjabinema
+  - toxocara
+  - strongyloides
+  - capillaria
+  - giardia
+- name: node_D
+  data_yaml: data/kfm_250423/node_D/data.yaml
+  owned_classes:
+  - ascaris
+  - ancylostoma
+output_dir: runs/kfm_250423_federation
+seed: 0
