@@ -20,7 +20,7 @@ from rich.logging import RichHandler
 from rich.panel import Panel
 
 from .config import load_config
-from .evaluate import evaluate_state_dict
+from .evaluate import evaluate_state_dict, per_class_map50
 from .server import AsyncFedServer, FedServer
 
 # 1. Upgrade logging to use RichHandler for beautiful terminal logs
@@ -139,7 +139,7 @@ def main():
         summary = {"federated": {
             "map50":    final_fed["map50"],
             "map50-95": final_fed["map5095"],
-            "per_class_map50-95": final_fed["per_class"],
+            "per_class_map50": final_fed["per_class"],
         }}
         log.info(
             f"[bold green]Final federated mAP50=[/bold green][bold magenta]{final_fed['map50']:.4f}[/bold magenta]  "
@@ -187,9 +187,7 @@ def _summarize(metrics) -> dict:
     return {
         "map50-95": float(metrics.box.map),
         "map50": float(metrics.box.map50),
-        "per_class_map50-95": {
-            name: float(ap) for name, ap in zip(metrics.names.values(), metrics.box.maps)
-        },
+        "per_class_map50": per_class_map50(metrics),
     }
 
 

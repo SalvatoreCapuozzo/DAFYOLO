@@ -295,7 +295,16 @@ federation:
   warmup_steps: 20
   grad_clip: 10.0
   workers: 0
-  device: cpu              # or "cuda"
+  device: auto             # (default) resolves per-machine at load time: CUDA if
+                           # available, else Apple MPS, else CPU. Pin with "cuda"/
+                           # "cuda:0"/"mps"/"cpu" instead if you need a specific one.
+  data_fraction: 1.0       # naive prefix slice of each node's TRAIN images
+                           # (Ultralytics' own `fraction=`) -- not class-aware.
+  balanced_fraction: null  # class-stratified alternative applied to train AND
+                           # the pooled eval set: every class keeps
+                           # max(1, round(count * balanced_fraction)) of its
+                           # images. Overrides data_fraction when set (e.g. 0.10
+                           # for a fast, class-balanced ~10% local run).
 
   # sync only
   rounds: 20
@@ -342,6 +351,6 @@ Outputs are written to `runs/<output_dir>/`:
 - **Async**: `global_v{V:04d}_{node_name}.pt` per submission (full trajectory),
   `global_final.pt`
 - `eval/` — mAP results from Ultralytics validator
-- `summary.json` — per-class and overall mAP50 / mAP50-95 for federated and
-  (optionally) centralized models
+- `summary.json` — per-class mAP50 and overall mAP50 / mAP50-95 for
+  federated and (optionally) centralized models
 - `live_training_logs.txt` — per-epoch loss for every node, every round/cycle

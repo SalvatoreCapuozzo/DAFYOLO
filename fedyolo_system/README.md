@@ -102,10 +102,18 @@ pip install -r requirements.txt
 ## Quickstart (synthetic data, validates the whole pipeline in a few minutes)
 
 ```bash
-python tools/make_synthetic_dataset.py --out data/synthetic --n-per-node 24
+python tools/make_synthetic_dataset.py --out data/synthetic --n-train 24 --n-val 8
 python -m fedyolo.simulate --config configs/example_federation.yaml
 # add --also-centralized to also train and report the non-federated baseline
 ```
+
+`make_synthetic_dataset.py`'s flags are `--n-train`/`--n-val` (an earlier `--n-per-node`
+in this doc no longer matches the script and will fail with "unrecognized arguments").
+`federation.device` defaults to `auto` and resolves itself per-machine at load time
+(CUDA if available, else Apple MPS, else CPU — both verified to work, no CUDA-only
+code paths involved) — nothing to edit moving this config between machines. Pin an
+explicit `cuda`/`cuda:0`/`mps`/`cpu` in the config instead if you need one specific
+backend regardless of what's detected.
 
 Outputs land in `runs/example_federation/`: a checkpoint per round, the final
 global model (`global_final.pt`), and `summary.json` with per-class and
@@ -208,10 +216,14 @@ checked before delivery.
 | field | meaning |
 |---|---|
 | `global_classes` | canonical class list, shared index space across all nodes |
-| `model.arch` | Ultralytics architecture yaml (e.g. `yolov8n.yaml`/`yolov8s.yaml`...) -- random init, no pretrained checkpoint downloaded |
+| `model.arch` | Ultralytics architecture yaml (e.g. `yolov8n.yaml`/`yolov8s.yaml`...) |
 | `model.imgsz` | input resolution; see the caveat above about small objects needing larger imgsz |
+| `model.pretrained` | default `true`: SHARED params (backbone/neck/box-head/DFL) init from the arch's official COCO checkpoint (downloaded on first use); the per-class head always stays random regardless. Set `false` to reproduce the original fully-blank/from-scratch behavior. |
+| `federation.device` | default `"auto"`: resolves to CUDA if available, else Apple MPS, else CPU, at config-load time. Set an explicit `"cuda"`/`"cuda:0"`/`"mps"`/`"cpu"` to pin it instead. |
 | `federation.rounds` / `local_epochs` | total local epochs per node = rounds x local_epochs |
 | `federation.lr0` / `warmup_steps` / `grad_clip` | every local round reloads fresh global weights into a new optimizer, so a short per-round LR warmup + gradient clipping matters a lot for stability from random init |
+| `federation.data_fraction` | use only the first N% of each node's TRAIN images (Ultralytics' own naive prefix slice -- not class-aware). For fast smoke-tests only; can silently drop a rare class to zero images on an imbalanced dataset. |
+| `federation.balanced_fraction` | class-stratified alternative to `data_fraction`, applied to train AND the pooled eval set: every class keeps `max(1, round(count * balanced_fraction))` of its images. `None` (default) disables it; takes priority over `data_fraction` when set. Use this instead of `data_fraction` on any real, imbalanced dataset. |
 | `federation.pseudo_label.*` | optional cross-round self-distillation for not-owned classes (see above) |
 | `nodes[].owned_classes` | which global classes this node has ground truth for, in local-label-index order |
 
@@ -274,10 +286,25 @@ python -m fedyolo.simulate \
     --config configs/from_global_federation.yaml \
     --also-centralized
 ```
-Example:
+Example (remote Linux GPU box):
 ```
 python tools/split_dataset_into_nodes.py \
     --dataset /home/salvatorecapuozzo/kfm_250423_subdataset/export \
+    --out data/kfm_250423 \
+    --n-nodes 4 \
+    --drop-classes bubble,dirt \
+    --config-out configs/kfm_250423_fed_260713.yaml
+python -m fedyolo.simulate \
+    --config configs/kfm_250423_fed_260706.yaml \
+    --also-centralized
+```
+Same example on this Mac -- only `--dataset` changes (`federation.device: auto`
+already resolves itself per-machine; see `../legacy/server_paths.yaml` for the same
+Linux/macOS split used by the legacy client/server scripts, for paths other
+than the dataset):
+```
+python tools/split_dataset_into_nodes.py \
+    --dataset /Users/salvatorecapuozzo/kfm_250423_subdataset/export \
     --out data/kfm_250423 \
     --n-nodes 4 \
     --drop-classes bubble,dirt \

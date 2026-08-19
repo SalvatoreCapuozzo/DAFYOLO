@@ -9,15 +9,19 @@ from ultralytics.utils.downloads import download
 import torch
 from ultralytics.models.yolo.detect import DetectionTrainer
 
-load_dotenv()
+# .env lives alongside this script (legacy/.env) -- load explicitly by path
+# rather than relying on python-dotenv's CWD-upward search.
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(_script_dir, '.env'))
 
 # --- SSH Configuration ---
 SERVER_IP = os.getenv("SERVER_IP")
 SSH_PORT = 22
 SSH_USER = os.getenv("USERNAME")
 SSH_PASSWORD = os.getenv("PASSWORD")
-SERVER_UPLOAD_DIR = "/datadrive/DAFYOLO/uploads"
-SERVER_DOWNLOAD_DIR = "/datadrive/DAFYOLO/global_model"
+# Paths on the SSH server -- from server_paths.yaml (macos_laptop /
+# linux_gpu_box), picked automatically by OS or via DAFYOLO_SERVER_PROFILE.
+from server_paths import UPLOAD_DIR as SERVER_UPLOAD_DIR, GLOBAL_MODEL_DIR as SERVER_DOWNLOAD_DIR
 
 # ==============================================================================
 # ROOT CAUSE FIX #1: Replace FedProxTrainer with HeadOnlyTrainer

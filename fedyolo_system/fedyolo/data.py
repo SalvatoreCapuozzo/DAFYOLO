@@ -19,6 +19,7 @@ from ultralytics.data.build import build_dataloader
 from ultralytics.data.dataset import YOLODataset
 
 from .config import FedYoloConfig, NodeConfig
+from .sampling import cached_balanced_image_subset
 
 
 class RemappedYOLODataset(YOLODataset):
@@ -90,6 +91,15 @@ def build_node_dataset(node: NodeConfig, cfg: FedYoloConfig, split: str = "train
             f"must exactly match owned_classes order ({node.owned_classes})"
         )
 
+    balanced_fraction = cfg.federation.balanced_fraction
+    if balanced_fraction is not None and balanced_fraction < 1.0:
+        manifest = Path(cfg.output_dir) / "balanced_subsets" / f"{node.name}_{split}.txt"
+        cached_balanced_image_subset(Path(img_path), balanced_fraction, cfg.seed, manifest)
+        img_path = str(manifest)
+        fraction = 1.0  # manifest is already the final list -- don't slice it again
+    else:
+        fraction = cfg.federation.data_fraction
+
     augment = split == "train"
     dataset = RemappedYOLODataset(
         img_path=img_path,
@@ -106,7 +116,7 @@ def build_node_dataset(node: NodeConfig, cfg: FedYoloConfig, split: str = "train
         task="detect",
         classes=None,
         data={"nc": len(local_names), "names": {i: n for i, n in enumerate(local_names)}, "channels": 3},
-        fraction=cfg.federation.data_fraction,
+        fraction=fraction,
         class_id_map=node.class_id_map(cfg.global_classes),
     )
     return dataset

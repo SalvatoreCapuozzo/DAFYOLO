@@ -11,10 +11,13 @@ from ultralytics.utils.downloads import download
 import torch
 from ultralytics.models.yolo.detect import DetectionTrainer
 
-load_dotenv(override=True)
+# .env lives alongside this script (legacy/.env) -- load explicitly by path
+# rather than relying on python-dotenv's CWD-upward search, which breaks as
+# soon as this script isn't run with the repo root as CWD.
+script_dir = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(script_dir, '.env'), override=True)
 
 # Force Ultralytics dataset root into the repo workspace for local runs
-script_dir = os.path.dirname(os.path.abspath(__file__))
 settings['datasets_dir'] = os.path.abspath(os.path.join(script_dir, 'datasets'))
 
 # ==============================================================================

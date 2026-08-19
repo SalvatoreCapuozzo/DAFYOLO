@@ -1,4 +1,4 @@
-path: /home/salvatorecapuozzo/DAFYOLO/datasets/VOC
+path: datasets/VOC   # relative to repo root -- portable across machines (was a hardcoded Linux path)
 train: images/train
 val: images/val
 nc: 20

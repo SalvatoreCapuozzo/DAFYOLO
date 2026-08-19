@@ -12,6 +12,7 @@ from pathlib import Path
 import yaml
 
 from .config import FedYoloConfig
+from .sampling import cached_balanced_image_subset
 
 
 def _node_image_label_dirs(node, split: str) -> tuple[Path, Path]:
@@ -24,7 +25,15 @@ def _node_image_label_dirs(node, split: str) -> tuple[Path, Path]:
     return img_dir, label_dir
 
 
-def materialize_pooled_dataset(cfg: FedYoloConfig, split: str, out_dir: str | Path) -> Path:
+def materialize_pooled_dataset(
+    cfg: FedYoloConfig, split: str, out_dir: str | Path,
+    fraction: float | None = None, seed: int = 0,
+) -> Path:
+    """fraction: same class-stratified "balanced fraction" as
+    federation.balanced_fraction (data.py) -- applied here too so a fast
+    local run also gets a fast, class-balanced pooled eval set instead of
+    always scoring against every node's full validation split. None/1.0 =
+    every image, unfiltered (original behavior)."""
     out_dir = Path(out_dir)
     img_out = out_dir / "images"
     lbl_out = out_dir / "labels"
@@ -34,7 +43,15 @@ def materialize_pooled_dataset(cfg: FedYoloConfig, split: str, out_dir: str | Pa
     for node in cfg.nodes:
         img_dir, label_dir = _node_image_label_dirs(node, split)
         id_map = node.class_id_map(cfg.global_classes)
-        for img_path in sorted(Path(img_dir).iterdir()):
+        images = (
+            cached_balanced_image_subset(
+                img_dir, fraction, seed,
+                cache_file=out_dir.parent / "balanced_subsets_pooled" / f"{node.name}_{split}.txt",
+            )
+            if fraction is not None and fraction < 1.0
+            else sorted(Path(img_dir).iterdir())
+        )
+        for img_path in images:
             if img_path.suffix.lower() not in {".jpg", ".jpeg", ".png", ".bmp"}:
                 continue
             label_path = label_dir / (img_path.stem + ".txt")

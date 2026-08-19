@@ -15,6 +15,11 @@ env_path = os.path.join(script_dir, '.env')
 load_dotenv(env_path)
 
 from client_updated import SERVER_IP, SSH_PORT, SSH_USER, SSH_PASSWORD, SERVER_UPLOAD_DIR
+# Diagnosing a *remote* server over SSH -- see check_server_running.py's note
+# on why this defaults to linux_gpu_box rather than local-OS auto-detection.
+from server_paths import load_profile
+_remote = load_profile(os.getenv("DAFYOLO_SERVER_PROFILE", "linux_gpu_box"))
+SERVER_GLOBAL_MODEL_DIR = _remote["global_model_dir"]
 
 print("=" * 80)
 print("🔍 DAFYOLO Communication Diagnostic")
@@ -72,7 +77,7 @@ try:
     
     # Check 5: Check server_info.json
     print("\n5️⃣  Checking Server Info...")
-    server_info_path = "/datadrive/DAFYOLO/global_model/server_info.json"
+    server_info_path = f"{SERVER_GLOBAL_MODEL_DIR}/server_info.json"
     try:
         with sftp.file(server_info_path, 'r') as f:
             server_info = json.load(f)
@@ -86,7 +91,7 @@ try:
     # Check 6: Check if any global model exists
     print("\n6️⃣  Checking Global Model...")
     try:
-        sftp.stat("/datadrive/DAFYOLO/global_model/global_model.pt")
+        sftp.stat(f"{SERVER_GLOBAL_MODEL_DIR}/global_model.pt")
         print(f"   ✅ Global model exists")
     except FileNotFoundError:
         print(f"   ℹ️  No global model yet (expected on first run)")

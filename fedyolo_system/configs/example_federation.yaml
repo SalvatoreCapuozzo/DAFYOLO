@@ -1,11 +1,18 @@
 global_classes:
-  - circle
-  - triangle
-  - square
+  - ascaris
+  - trichuris
+  - hookworm
 
 model:
-  arch: yolov8n.yaml   # Ultralytics architecture yaml — random (blank) init, no pretrained download
+  arch: yolov8n.yaml   # Ultralytics architecture yaml
   imgsz: 256           # input resolution; keep >=256 for small objects (see README)
+  pretrained: false    # blank/random init end to end, matching this file's documented,
+                        # fully-offline quickstart (no COCO checkpoint download needed).
+                        # model.pretrained defaults to true in fedyolo/config.py, which
+                        # instead initializes the SHARED backbone/neck/box-head from the
+                        # arch's official COCO checkpoint (downloaded on first use) --
+                        # set this to true (or delete the line) once you have network
+                        # access and want that warm start.
 
 federation:
   # ── mode selector ────────────────────────────────────────────────────────
@@ -19,7 +26,9 @@ federation:
   warmup_steps: 20     # linear LR warmup at start of every round/cycle
   grad_clip: 10.0      # gradient-norm clipping (important for from-scratch training)
   workers: 0
-  device: cpu          # set to "cuda" if GPU available
+  device: auto         # resolves per-machine at load time: CUDA if available, else
+                       # Apple MPS, else CPU -- both CUDA and MPS verified to run this
+                       # config. Set an explicit "cuda"/"mps"/"cpu" instead to pin it.
 
   # ── sync only (ignored when mode: async) ─────────────────────────────────
   rounds: 4            # federated rounds; total epochs/node = rounds × local_epochs
@@ -42,15 +51,15 @@ federation:
 nodes:
   - name: node_A
     data_yaml: data/synthetic/node_A/data.yaml
-    owned_classes: [circle, triangle]   # local label 0→circle, 1→triangle
+    owned_classes: [ascaris, trichuris]   # local label 0→ascaris, 1→trichuris
 
   - name: node_B
     data_yaml: data/synthetic/node_B/data.yaml
-    owned_classes: [square]             # local label 0→square
+    owned_classes: [hookworm]             # local label 0→hookworm
 
   - name: node_C
     data_yaml: data/synthetic/node_C/data.yaml
-    owned_classes: [circle, square]     # local label 0→circle, 1→square
+    owned_classes: [ascaris, hookworm]    # local label 0→ascaris, 1→hookworm
 
 output_dir: runs/example_federation
 seed: 0

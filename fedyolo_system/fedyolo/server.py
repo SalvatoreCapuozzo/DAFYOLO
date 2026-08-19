@@ -104,16 +104,13 @@ def _run_eval(cfg: FedYoloConfig, state_dict: dict, label: str) -> dict | None:
     display the latest known mAP in their progress bar without waiting for
     the full run to complete."""
     try:
-        from .evaluate import evaluate_state_dict
+        from .evaluate import evaluate_state_dict, per_class_map50
         metrics = evaluate_state_dict(cfg, state_dict, name=label, verbose=False)
         result = {
             "label":    label,
             "map50":    float(metrics.box.map50),
             "map5095":  float(metrics.box.map),
-            "per_class": {
-                name: float(ap)
-                for name, ap in zip(metrics.names.values(), metrics.box.maps)
-            },
+            "per_class": per_class_map50(metrics),
         }
         # Documented but previously never actually written -- this is what
         # client.py's _read_latest_map() polls to show live mAP in each
@@ -146,8 +143,8 @@ def _print_map_table(history: list[dict], global_classes: list[str]) -> None:
     table.add_column("Step",      style="cyan",  no_wrap=True)
     table.add_column("mAP50",     style="bold green")
     table.add_column("mAP50-95",  style="bold yellow")
-    table.add_column("Best class (mAP50-95)", style="dim white")
-    table.add_column("Worst class (mAP50-95)", style="dim white")
+    table.add_column("Best class (mAP50)", style="dim white")
+    table.add_column("Worst class (mAP50)", style="dim white")
 
     best_map50 = max(h["map50"] for h in history)
 

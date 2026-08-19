@@ -1,0 +1,1482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DAFYOLO Field Report</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root{
+    --bg-page:      #f4f5f8;
+    --surface:      #ffffff;
+    --surface-2:    #eceef3;
+    --ink:          #12141c;
+    --ink-2:        #454b5a;
+    --muted:        #838ba0;
+    --border:       rgba(18,20,28,0.11);
+    --border-soft:  rgba(18,20,28,0.06);
+    --accent:       #2a5bd6;
+    --accent-ink:   #17399e;
+    --accent-soft:  #e7edfc;
+    --accent-soft-b:#c9d7f8;
+    --code-bg:      #14161d;
+    --code-ink:     #e4e7ef;
+    --code-muted:   #8790a6;
+
+    --s-blue:   #2a78d6;
+    --s-orange: #eb6834;
+    --s-aqua:   #1baf7a;
+
+    --good:      #0ca30c;
+    --good-soft: #e4f6e2;
+    --good-bd:   #b7e3ac;
+    --warn:      #b4790a;
+    --warn-soft: #fdf1da;
+    --warn-bd:   #f0d59a;
+    --bad:       #c4382f;
+    --bad-soft:  #fbe6e3;
+    --bad-bd:    #f0b8b0;
+    --fix:       #6d3fc9;
+    --fix-soft:  #f0e9fc;
+    --fix-bd:    #d4c1f2;
+
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg-page:      #0c0d11;
+      --surface:      #15171e;
+      --surface-2:    #1b1e27;
+      --ink:          #eef0f6;
+      --ink-2:        #c2c7d6;
+      --muted:        #8891a3;
+      --border:       rgba(255,255,255,0.12);
+      --border-soft:  rgba(255,255,255,0.07);
+      --accent:       #6f97ea;
+      --accent-ink:   #a9c0f2;
+      --accent-soft:  #1c2745;
+      --accent-soft-b:#2c3c66;
+      --code-bg:      #0a0b0f;
+      --code-ink:     #dfe3ee;
+      --code-muted:   #7d8499;
+
+      --s-blue:   #3987e5;
+      --s-orange: #d95926;
+      --s-aqua:   #199e70;
+
+      --good:      #35c55b;
+      --good-soft: #123320;
+      --good-bd:   #1f5c37;
+      --warn:      #f0ab2e;
+      --warn-soft: #3a2c0d;
+      --warn-bd:   #6b5019;
+      --bad:       #f0685c;
+      --bad-soft:  #3a1712;
+      --bad-bd:    #6e2a22;
+      --fix:       #b494ec;
+      --fix-soft:  #241a3d;
+      --fix-bd:    #46356f;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg-page:      #0c0d11;
+    --surface:      #15171e;
+    --surface-2:    #1b1e27;
+    --ink:          #eef0f6;
+    --ink-2:        #c2c7d6;
+    --muted:        #8891a3;
+    --border:       rgba(255,255,255,0.12);
+    --border-soft:  rgba(255,255,255,0.07);
+    --accent:       #6f97ea;
+    --accent-ink:   #a9c0f2;
+    --accent-soft:  #1c2745;
+    --accent-soft-b:#2c3c66;
+    --code-bg:      #0a0b0f;
+    --code-ink:     #dfe3ee;
+    --code-muted:   #7d8499;
+
+    --s-blue:   #3987e5;
+    --s-orange: #d95926;
+    --s-aqua:   #199e70;
+
+    --good:      #35c55b;
+    --good-soft: #123320;
+    --good-bd:   #1f5c37;
+    --warn:      #f0ab2e;
+    --warn-soft: #3a2c0d;
+    --warn-bd:   #6b5019;
+    --bad:       #f0685c;
+    --bad-soft:  #3a1712;
+    --bad-bd:    #6e2a22;
+    --fix:       #b494ec;
+    --fix-soft:  #241a3d;
+    --fix-bd:    #46356f;
+    color-scheme: dark;
+  }
+
+  *{ box-sizing: border-box; }
+  body{
+    margin:0;
+    background: var(--bg-page);
+    color: var(--ink);
+    font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+    font-size: 16.5px;
+    line-height: 1.6;
+  }
+  h1,h2,h3,h4{
+    font-family: "Archivo", "Arial Narrow", sans-serif;
+    color: var(--ink);
+    text-wrap: balance;
+    letter-spacing: -0.01em;
+  }
+  .mono, code, .tag, table, .stat-val, .badge, .kpi-val, th{
+    font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  a{ color: var(--accent-ink); }
+
+  .wrap{ max-width: 1180px; margin: 0 auto; padding: 0 28px 120px; }
+  .prose{ max-width: 760px; }
+
+  /* ---------- Header ---------- */
+  header.top{
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, var(--surface-2), var(--bg-page) 140%);
+  }
+  .eyebrow{
+    font-family:"IBM Plex Mono", monospace;
+    font-size: 12.5px;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--accent-ink);
+    display:flex; align-items:center; gap:10px;
+    margin-bottom: 14px;
+  }
+  .eyebrow::before{
+    content:"";
+    width: 22px; height: 1px; background: var(--accent);
+  }
+  header.top .wrap{ padding-top: 56px; padding-bottom: 40px; }
+  h1.title{
+    font-size: clamp(2.1rem, 3.4vw, 3.05rem);
+    font-weight: 800;
+    margin: 0 0 14px;
+    line-height: 1.04;
+  }
+  .dek{
+    max-width: 700px;
+    font-family: "Source Serif 4", serif;
+    font-size: 1.14rem;
+    color: var(--ink-2);
+    margin: 0 0 30px;
+  }
+  .meta-row{
+    display:flex; flex-wrap:wrap; gap: 8px 22px;
+    font-family:"IBM Plex Mono",monospace;
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+  .meta-row b{ color: var(--ink-2); font-weight:600; }
+
+  /* ---------- stat tiles ---------- */
+  .stats{
+    display:grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin-top: 34px;
+    border-radius: 10px;
+    overflow:hidden;
+  }
+  .stat{
+    background: var(--surface);
+    padding: 18px 18px 16px;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .stat-label{
+    font-family:"IBM Plex Mono",monospace;
+    font-size: 10.8px; letter-spacing:.06em; text-transform:uppercase;
+    color: var(--muted);
+  }
+  .stat-val{ font-size: 1.5rem; font-weight:600; line-height:1.15; color:var(--ink); }
+  .stat-sub{ font-size: 12px; color: var(--muted); font-family:"Source Serif 4",serif;}
+  .stat.crit .stat-val{ color: var(--bad); }
+  .stat.good .stat-val{ color: var(--good); }
+  .stat.warn .stat-val{ color: var(--warn); }
+  @media (max-width: 980px){ .stats{ grid-template-columns: repeat(2,1fr);} }
+
+  /* ---------- sections ---------- */
+  main{ padding-top: 54px; display:flex; flex-direction:column; gap:66px; }
+  section{ scroll-margin-top: 20px; }
+  .sec-head{
+    display:flex; align-items:baseline; gap:16px;
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 10px;
+    margin-bottom: 26px;
+  }
+  .sec-num{
+    font-family:"IBM Plex Mono",monospace;
+    color: var(--accent-ink);
+    font-size: 13px;
+  }
+  h2.sec-title{ font-size: 1.55rem; margin:0; font-weight:800; }
+  h3{ font-size: 1.14rem; font-weight:700; margin: 30px 0 10px; }
+  p{ margin: 0 0 14px; color: var(--ink-2); }
+  .prose p:last-child{ margin-bottom:0; }
+  ul.plain, ol.plain{ padding-left: 22px; color: var(--ink-2); }
+  ul.plain li, ol.plain li{ margin-bottom: 8px; }
+
+  /* ---------- badges ---------- */
+  .badge{
+    display:inline-flex; align-items:center; gap:6px;
+    font-size: 11.5px; font-weight:600; letter-spacing:.02em;
+    padding: 3px 9px 3px 8px; border-radius: 5px;
+    border:1px solid; white-space:nowrap;
+  }
+  .badge.good{ background:var(--good-soft); color:var(--good); border-color:var(--good-bd); }
+  .badge.warn{ background:var(--warn-soft); color:var(--warn); border-color:var(--warn-bd); }
+  .badge.bad{  background:var(--bad-soft);  color:var(--bad);  border-color:var(--bad-bd); }
+  .badge.fix{  background:var(--fix-soft);  color:var(--fix);  border-color:var(--fix-bd); }
+  .badge.neu{  background:var(--surface-2); color:var(--ink-2); border-color:var(--border); }
+
+  /* ---------- cards ---------- */
+  .twocol{ display:grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 860px){ .twocol{ grid-template-columns: 1fr; } }
+  .card{
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 24px;
+  }
+  .card h3{ margin-top:0; display:flex; align-items:center; justify-content:space-between; gap:10px;}
+  .card p:last-child{ margin-bottom:0; }
+  .card .foot-note{
+    margin-top:14px; padding-top:12px; border-top:1px dashed var(--border);
+    font-size:13px; color:var(--muted);
+  }
+
+  /* ---------- tables ---------- */
+  .tbl-wrap{ overflow-x:auto; border:1px solid var(--border); border-radius:10px; }
+  table{ border-collapse: collapse; width:100%; min-width: 620px; font-size: 13px; background:var(--surface);}
+  th, td{ padding: 9px 14px; text-align:left; border-bottom:1px solid var(--border-soft); white-space:nowrap; }
+  thead th{
+    background: var(--surface-2); color: var(--ink-2);
+    font-size: 11px; letter-spacing:.05em; text-transform:uppercase;
+    position: sticky; top:0; font-weight:600;
+  }
+  tbody tr:last-child td{ border-bottom:none; }
+  tbody tr:hover{ background: var(--accent-soft); }
+  td.num, th.num{ text-align:right; font-variant-numeric: tabular-nums; }
+  td.wrap-cell{ white-space:normal; min-width:220px; }
+  .row-crit td:first-child{ box-shadow: inset 3px 0 0 var(--bad); }
+  .row-good td:first-child{ box-shadow: inset 3px 0 0 var(--good); }
+
+  /* ---------- code ---------- */
+  pre{
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 15px 18px; border-radius: 8px; overflow-x:auto;
+    font-family:"IBM Plex Mono",monospace; font-size: 12.6px; line-height:1.55;
+    border: 1px solid var(--border-soft);
+  }
+  pre .c{ color: var(--code-muted); }
+  code.inline{
+    background: var(--surface-2); color: var(--ink);
+    padding: 1px 6px; border-radius: 4px; font-size: 0.86em; border:1px solid var(--border-soft);
+  }
+  .diff-add{ color:#8fe39a; } .diff-del{ color:#f2a8a2; text-decoration:line-through; opacity:.7; }
+
+  /* ---------- chart ---------- */
+  .chart-card{ background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:22px 26px 18px; }
+  .chart-title{ font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom: 4px;}
+  .chart-sub{ font-size: 13px; color:var(--ink-2); margin-bottom: 18px; }
+  .legend{ display:flex; gap:18px; font-size:12.5px; color:var(--ink-2); margin-bottom:14px; }
+  .legend span{ display:inline-flex; align-items:center; gap:6px; }
+  .swatch{ width:11px; height:11px; border-radius:2px; display:inline-block; }
+  .bar-row{ display:grid; grid-template-columns: 128px 1fr; align-items:center; gap:10px; margin-bottom:9px; }
+  .bar-label{ font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--ink-2); text-align:right; }
+  .bar-track{ position:relative; height:36px; }
+  .bar-pair{ position:relative; height:34px; display:flex; flex-direction:column; gap:3px; justify-content:center; }
+  .bar{ height:14px; border-radius: 0 4px 4px 0; position:relative; display:flex; align-items:center; min-width: 3px; }
+  .bar-fig{ position:absolute; left:calc(100% + 8px); font-size:11px; font-family:"IBM Plex Mono",monospace; color:var(--ink-2); white-space:nowrap; }
+  .bar-scale{ display:grid; grid-template-columns: 128px 1fr; margin-top:6px; }
+  .bar-scale .ticks{ display:flex; justify-content:space-between; font-size:10.5px; color:var(--muted); font-family:"IBM Plex Mono",monospace; }
+
+  .fed-chart .bar-row{ grid-template-columns: 148px 1fr; }
+  .fed-bar-track{ display:flex; flex-direction:column; gap:10px; }
+  .fed-bar{ height:22px; border-radius:0 5px 5px 0; display:flex; align-items:center; }
+  .fed-bar.federated{ background: var(--s-blue); }
+  .fed-bar.centralized{ background: transparent; border:1.5px dashed var(--muted); }
+
+  /* ---------- footer ---------- */
+  footer{
+    border-top:1px solid var(--border); margin-top: 80px; padding-top:26px;
+    font-size:12.5px; color:var(--muted); font-family:"IBM Plex Mono",monospace;
+    display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px;
+  }
+
+  ::selection{ background: var(--accent-soft-b); }
+</style>
+
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="eyebrow">Federated detection · diagnostic pass</div>
+    <h1 class="title">Where DAFYOLO's performance actually goes</h1>
+    <p class="dek">A side-by-side of every merge strategy and both federation
+    engines in this repository — why the legacy global model collapses to
+    single-digit mAP, the one real-dataset run where the newer
+    <code class="inline">fedyolo_system</code> rewrite actually works (and the
+    seven since that didn't reproduce it), and what it took to get a broken
+    quickstart and six hardcoded Linux paths running on this Mac.</p>
+    <div class="meta-row">
+      <span><b>Repo</b> DAFYOLO</span>
+      <span><b>Prepared for</b> ipezzentidisagiati@gmail.com</span>
+      <span><b>Date</b> 2026-08-19</span>
+      <span><b>Test bench</b> MacBook · Apple M2 Pro · 16 GB RAM · macOS (arm64)</span>
+    </div>
+
+    <div class="stats">
+      <div class="stat crit">
+        <div class="stat-label">Legacy global mAP50</div>
+        <div class="stat-val">0.001 – 0.165</div>
+        <div class="stat-sub">6 strategies × 2 scenarios × 3 experiment dates</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Legacy local mAP50</div>
+        <div class="stat-val">0.20 – 0.88</div>
+        <div class="stat-sub">same nodes, evaluated on their own classes only</div>
+      </div>
+      <div class="stat good">
+        <div class="stat-label">fedyolo_system · real kfm_250423 data</div>
+        <div class="stat-val">65 – 101%</div>
+        <div class="stat-sub">federated as % of centralized mAP50, sync vs. async, 8 attempts total</div>
+      </div>
+      <div class="stat good">
+        <div class="stat-label">Async, verified 2 seeds</div>
+        <div class="stat-val">101%</div>
+        <div class="stat-sub">federated ≈ centralized — the one config where federating cost nothing measurable — §5</div>
+      </div>
+      <div class="stat good">
+        <div class="stat-label">Synthetic smoke-test, this Mac</div>
+        <div class="stat-val">0.76 – 0.99</div>
+        <div class="stat-sub">federated mAP50, toy 3-class set, CPU + MPS verified</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+<main>
+
+  <!-- ============================================================ -->
+  <section id="systems">
+    <div class="sec-head"><span class="sec-num">01</span><h2 class="sec-title">Two systems living in one repo</h2></div>
+    <div class="twocol">
+      <div class="card">
+        <h3>Legacy DAFYOLO <span class="badge warn">6 merge strategies</span></h3>
+        <p><code class="inline">client.py</code> → <code class="inline">client_updated.py</code> →
+        <code class="inline">client_v2.py</code>, and the matching
+        <code class="inline">server*.py</code> trio. A client trains a full YOLO
+        checkpoint per class-set on a remote (or local) node, uploads it over SSH,
+        and the server merges incoming heads into a shared global model using a
+        selectable strategy: <b>FedHead, Stitch, TIES, FedAvg, FedProx, YOLO-Inc,
+        YOLOPA-NeckHead</b>. <code class="inline">run_experiments.py</code>
+        automates a full strategy × scenario sweep over VOC classes.</p>
+        <div class="foot-note">Actively developed the longest — 11 of the repo's
+        12 commits touch this line of code. Now lives under
+        <code class="inline">legacy/</code> (moved there this pass — see §7).</div>
+      </div>
+      <div class="card">
+        <h3><code class="inline">fedyolo_system/</code> <span class="badge good">rewrite, verified on real data</span></h3>
+        <p>A from-scratch redesign built around one structural argument: YOLOv8's
+        detect head ends in a 1×1 conv where output channel <i>c</i> literally
+        <i>is</i> class <i>c</i>'s logit. Split the model along that seam — shared
+        backbone/neck/box-head vs. one per-class parameter slice — and aggregation
+        stops needing a merge heuristic at all: shared weights FedAvg normally,
+        each class slice averages only across the nodes that actually own it.
+        Ships both a sync (round-barrier) and async (staleness-discounted delta)
+        server.</p>
+        <div class="foot-note">Added in the same commit as the analysis docs
+        below. One complete real-dataset run beats its own centralized
+        baseline on 2 of 20 classes and reaches 68% overall — see §4.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="legacy-results">
+    <div class="sec-head"><span class="sec-num">02</span><h2 class="sec-title">Legacy system: what the experiments actually recorded</h2></div>
+    <div class="prose">
+      <p>Three dated result logs exist from
+      <code class="inline">run_experiments.py</code> sweeps over two VOC-derived
+      scenarios — <b>EXTREME_NON_IID</b> (5 nodes, fully disjoint 4-class sets,
+      20 classes total) and <b>INTERSECTED</b> (5 nodes, overlapping 4-class sets,
+      11 classes total). Every strategy was scored two ways: each node's
+      <i>local</i> model against its own held-out classes, and the merged
+      <i>global</i> model against the full pooled validation set.</p>
+    </div>
+
+    <h3>Global mAP50 by strategy — 2026-04-30 run (most complete: 5 strategies × both scenarios)</h3>
+    <div class="chart-card">
+      <div class="chart-title">Federated aggregation, global model</div>
+      <div class="chart-sub">mAP50 on the pooled validation set, per strategy. For scale: the same nodes' <i>local</i> models scored 0.24–0.88 on their own classes in this run.</div>
+      <div class="legend">
+        <span><i class="swatch" style="background:var(--s-blue)"></i>EXTREME_NON_IID (20 cls)</span>
+        <span><i class="swatch" style="background:var(--s-orange)"></i>INTERSECTED (11 cls)</span>
+      </div>
+
+      <!-- bars: scale 0 to 0.20 -->
+      <div class="bar-row">
+        <div class="bar-label">FedHead</div>
+        <div class="bar-pair">
+          <div class="bar" style="background:var(--s-blue); width:21%;"><span class="bar-fig">0.042</span></div>
+          <div class="bar" style="background:var(--s-orange); width:32%;"><span class="bar-fig">0.064</span></div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Stitch</div>
+        <div class="bar-pair">
+          <div class="bar" style="background:var(--s-blue); width:21%;"><span class="bar-fig">0.042</span></div>
+          <div class="bar" style="background:var(--s-orange); width:32%;"><span class="bar-fig">0.064</span></div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">TIES</div>
+        <div class="bar-pair">
+          <div class="bar" style="background:var(--s-blue); width:27%;"><span class="bar-fig">0.054</span></div>
+          <div class="bar" style="background:var(--s-orange); width:37.5%;"><span class="bar-fig">0.075</span></div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">FedAvg</div>
+        <div class="bar-pair">
+          <div class="bar" style="background:var(--s-blue); width:24%;"><span class="bar-fig">0.048</span></div>
+          <div class="bar" style="background:var(--s-orange); width:43%;"><span class="bar-fig">0.086</span></div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">YOLO-Inc</div>
+        <div class="bar-pair">
+          <div class="bar" style="background:var(--s-blue); width:29.5%;"><span class="bar-fig">0.059</span></div>
+          <div class="bar" style="background:var(--s-orange); width:82.5%;"><span class="bar-fig">0.165</span></div>
+        </div>
+      </div>
+      <div class="bar-scale">
+        <div></div>
+        <div class="ticks"><span>0</span><span>0.05</span><span>0.10</span><span>0.15</span><span>0.20 mAP50</span></div>
+      </div>
+    </div>
+
+    <h3>Every logged run, in full</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Run</th><th>Strategy</th><th>Scenario</th>
+            <th class="num">Local mAP50 range</th>
+            <th class="num">Global mAP50</th>
+            <th>Classes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>2026-04-30</td><td>FedHead</td><td>EXTREME_NON_IID</td><td class="num">0.244–0.587</td><td class="num">0.042</td><td>20</td></tr>
+          <tr><td>2026-04-30</td><td>Stitch</td><td>EXTREME_NON_IID</td><td class="num">0.244–0.587</td><td class="num">0.042</td><td>20</td></tr>
+          <tr><td>2026-04-30</td><td>TIES</td><td>EXTREME_NON_IID</td><td class="num">0.346–0.587</td><td class="num">0.054</td><td>20</td></tr>
+          <tr><td>2026-04-30</td><td>FedAvg</td><td>EXTREME_NON_IID</td><td class="num">0.346–0.587</td><td class="num">0.048</td><td>20</td></tr>
+          <tr><td>2026-04-30</td><td>YOLO-Inc</td><td>EXTREME_NON_IID</td><td class="num">0.666–0.831</td><td class="num">0.059</td><td>20</td></tr>
+          <tr><td>2026-04-30</td><td>FedHead</td><td>INTERSECTED</td><td class="num">0.409–0.613</td><td class="num">0.064</td><td>11</td></tr>
+          <tr><td>2026-04-30</td><td>Stitch</td><td>INTERSECTED</td><td class="num">0.409–0.613</td><td class="num">0.064</td><td>11</td></tr>
+          <tr><td>2026-04-30</td><td>TIES</td><td>INTERSECTED</td><td class="num">0.436–0.677</td><td class="num">0.075</td><td>11</td></tr>
+          <tr><td>2026-04-30</td><td>FedAvg</td><td>INTERSECTED</td><td class="num">0.436–0.677</td><td class="num">0.086</td><td>11</td></tr>
+          <tr class="row-good"><td>2026-04-30</td><td>YOLO-Inc</td><td>INTERSECTED</td><td class="num">0.787–0.873</td><td class="num">0.165</td><td>11</td></tr>
+          <tr><td>2026-05-04</td><td>FedHead</td><td>EXTREME_NON_IID</td><td class="num">0.198–0.453</td><td class="num">0.005</td><td>20</td></tr>
+          <tr><td>2026-05-04</td><td>FedAvg</td><td>EXTREME_NON_IID</td><td class="num">0.252–0.453</td><td class="num">0.018</td><td>20</td></tr>
+          <tr><td>2026-05-04</td><td>YOLO-Inc</td><td>EXTREME_NON_IID</td><td class="num">0.612–0.834</td><td class="num">0.037</td><td>20</td></tr>
+          <tr><td>2026-05-04</td><td>FedHead</td><td>INTERSECTED</td><td class="num">0.287–0.426</td><td class="num">0.021</td><td>11</td></tr>
+          <tr><td>2026-05-04</td><td>FedAvg</td><td>INTERSECTED</td><td class="num">0.302–0.534</td><td class="num">0.082</td><td>11</td></tr>
+          <tr><td>2026-05-04</td><td>YOLO-Inc</td><td>INTERSECTED</td><td class="num">0.639–0.861</td><td class="num">0.134</td><td>11</td></tr>
+          <tr class="row-crit"><td>2026-05-05</td><td>YOLOPA-NeckHead</td><td>EXTREME_NON_IID</td><td class="num">0.638–0.821</td><td class="num">0.001</td><td>20</td></tr>
+          <tr class="row-crit"><td>2026-05-05</td><td>YOLOPA-NeckHead</td><td>INTERSECTED</td><td class="num">0.664–0.881</td><td class="num">0.001</td><td>11</td></tr>
+          <tr><td>2026-05-05 18:00</td><td>FedHead, FedAvg, <b>FedProx</b>, YOLO-Inc</td><td>both</td><td class="num">—</td><td class="num">—</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin-top:10px;">Last row:
+    <code class="inline">advanced_experiment_results_260505_1800.txt</code> contains only its
+    header — the sweep that was finally going to test <b>FedProx</b> (the fix
+    the analysis docs rank #1) started and never wrote a single result. Nothing
+    in this repo shows FedProx was ever actually evaluated, despite being the
+    headline recommendation in three of the seven analysis documents.</p>
+
+    <h3>Reading the pattern</h3>
+    <div class="prose">
+      <ul class="plain">
+        <li><b>Every strategy collapses the same way.</b> Local models land
+        respectably (0.20–0.88 mAP50, YOLO-Inc's locals are genuinely strong at
+        0.6–0.87) but every merged global model falls to 0.001–0.165 — a
+        <b>85–99% relative loss</b> versus the average local score, regardless
+        of which of the 6 strategies did the merging. That uniformity is itself
+        informative: it points at something structural in how heads get merged
+        or evaluated, not a strategy-specific bug.</li>
+        <li><b>FedHead and Stitch score identically</b> in the 2026-04-30 run
+        (0.042 / 0.064) — expected, since Stitch is documented as FedHead's
+        conservative subset (only the final 1×1 layer touched either way) when
+        run against the same client checkpoints; it's a useful sanity check that
+        the two paths are wired correctly, not evidence either one works.</li>
+        <li><b>YOLO-Inc consistently scores highest</b> (0.059–0.165) and also
+        has the strongest local models feeding it — it isn't obviously a better
+        merge strategy so much as a better-conditioned input.</li>
+        <li><b>YOLOPA-NeckHead is worse than random</b> at 0.001 both times it
+        was tested, despite feeding from the strongest local models of any run
+        (0.64–0.88) — the neck-averaging step this strategy adds over FedHead
+        is actively destructive here.</li>
+        <li><b>Run-to-run variance is large even for the same strategy.</b>
+        FedHead's EXTREME_NON_IID score moved from 0.042 → 0.005 between
+        2026-04-30 and 2026-05-04 with the same scenario definition — global
+        mAP in this system is not a stable measurement, which matters when
+        deciding whether a future fix actually helped.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="legacy-causes">
+    <div class="sec-head"><span class="sec-num">03</span><h2 class="sec-title">Why the legacy global model collapses</h2></div>
+    <div class="prose">
+      <p>Seven analysis documents in the repo root (<code class="inline">ANALYSIS_AND_FIXES.md</code>,
+      <code class="inline">FIXES_IMPLEMENTATION.md</code>, <code class="inline">ALTERNATIVE_STRATEGIES.md</code>
+      and four summaries of them) diagnose this exact collapse against
+      <code class="inline">client_updated.py</code> / <code class="inline">server_updated.py</code>
+      as they stood on <b>2026-05-04/05</b>. Their headline numbers (4–17% global mAP against
+      30–87% local) match the logged experiments above closely enough to trust —
+      but the code has moved since, in the very commit that added those documents
+      to git. Two claims were spot-checked against the code as it exists today:</p>
+    </div>
+
+    <div class="twocol">
+      <div class="card">
+        <h3>Claimed: duplicate <code class="inline">trainer.train()</code> call <span class="badge good">no longer present</span></h3>
+        <p>Filed as the #1 critical, 1-minute fix — a second, redundant call to
+        <code class="inline">trainer.train()</code> at <code class="inline">client_updated.py:310</code>,
+        silently doubling every client's training time. The current file has
+        exactly one <code class="inline">trainer.train()</code> call
+        (<code class="inline">client_updated.py:339</code>). Either it was fixed
+        in the same pass that produced these docs, or the line reference drifted
+        — either way, don't spend the "1 hour, +100%" budget on this one.</p>
+      </div>
+      <div class="card">
+        <h3>Structural: no shared feature space <span class="badge bad">still true, verified in code</span></h3>
+        <p>None of the six merge strategies decompose per-class output channels
+        the way <code class="inline">fedyolo_system/fedyolo/model.py</code> does.
+        FedAvg, TIES and YOLO-Inc all blend backbone/neck weights trained on
+        <i>disjoint</i> class sets — five separate feature extractors get
+        averaged into one, at random-initialization scale where there's no
+        pretrained anchor pulling them toward a shared basin. This is the one
+        root cause every document, the logged numbers, and the architecture
+        itself all agree on independently.</p>
+      </div>
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin-top:16px;">
+    The remaining 10 claims across the seven documents (alpha-weight
+    miscalculation, batch-norm momentum, validation-set class pollution,
+    catastrophic forgetting, etc.) were not individually re-verified line-by-line
+    for this report — treat their code-line references as of 2026-05-05 and
+    re-check against current <code class="inline">server_updated.py</code> /
+    <code class="inline">client_updated.py</code> before acting on any single one.
+    The <i>diagnosis</i> (disjoint-class averaging breaks a from-scratch shared
+    backbone) is corroborated independently by the numbers in §2 and is the
+    one to act on first.</p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="fedyolo-fix">
+    <div class="sec-head"><span class="sec-num">04</span><h2 class="sec-title"><code class="inline" style="font-size:inherit">fedyolo_system</code> on real data: one win, seven that didn't land</h2></div>
+    <div class="prose">
+      <p><span class="badge fix">update</span> The first pass of this report
+      found <code class="inline">fedyolo_system/runs/kfm_250423_federation/</code>
+      empty and concluded the variant had never produced a result. That was
+      true of the working tree at the time — the real run outputs lived only
+      on the remote GPU box and hadn't been copied back yet. They have been
+      since: <b>8 real-dataset experiment folders</b>, spanning 2026-07-04
+      through 2026-08-03, are now present under <code class="inline">fedyolo_system/runs/</code>.
+      One of them is a genuine, complete win. The other seven, all later, none
+      of them reproduce it.</p>
+    </div>
+
+    <h3>The one that worked — 2026-07-04, sync mode, real 20-class dataset</h3>
+    <div class="chart-card fed-chart">
+      <div class="chart-title"><code class="inline">runs/kfm_250423_federation/</code> · yolov8s @ 480px · 4 nodes · 20 rounds × 5 local epochs · cuda:0</div>
+      <div class="chart-sub">20 real parasite/microscopy taxa (kfm_250423 dataset) — not VOC, not the synthetic toy set. Class-conditional sync aggregation vs. the non-federated baseline, same total epoch budget.</div>
+      <div class="bar-row">
+        <div class="bar-label">Federated<br><span style="color:var(--muted);font-size:10.5px;">4 nodes, disjoint class sets</span></div>
+        <div class="fed-bar-track">
+          <div class="fed-bar federated" style="width:34%;"><span class="bar-fig" style="position:static;margin-left:10px;color:#fff;">mAP50 0.303 · mAP50-95 0.175</span></div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Centralized<br><span style="color:var(--muted);font-size:10.5px;">same total epoch budget</span></div>
+        <div class="fed-bar-track">
+          <div class="fed-bar centralized" style="width:50%;"><span class="bar-fig" style="position:static;margin-left:10px;">mAP50 0.446 · mAP50-95 0.255</span></div>
+        </div>
+      </div>
+      <div class="bar-scale"><div></div><div class="ticks"><span>0</span><span>0.15</span><span>0.30</span><span>0.45</span><span>0.60 mAP50</span></div></div>
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin-top:10px;">
+    Federated reaches <b>68% of the centralized mAP50</b> (0.303 / 0.446) on real
+    data with genuinely disjoint per-node classes — the same shape of problem
+    that collapses every legacy strategy to 1–17% in §2. Per-class, it's not
+    uniformly behind: federated actually <b>beats</b> centralized on
+    <code class="inline">fasciola</code> (0.555 vs. 0.507 mAP50-95) and
+    <code class="inline">moniezia_benedeni</code> (0.388 vs. 0.313), and ties
+    or trails narrowly on most others. It has one real weak spot:
+    <code class="inline">ancylostoma</code>, owned solely by node_D alongside
+    <code class="inline">ascaris</code>, scores 0.016 federated against 0.441
+    centralized — a near-total miss on a class the centralized model handles
+    fine, worth investigating before calling this settled.</p>
+
+    <h3>The absolute numbers are modest too, and a quarter of the per-class table is fake</h3>
+    <div class="prose">
+      <p><span class="badge fix">new finding</span> 0.303 / 0.446 mAP50 isn't just
+      low relative to a centralized baseline — it's modest in absolute terms for
+      a tuned detector, and part of why is a data problem hiding inside the
+      per-class breakdown. Five of the "20 classes" — <code class="inline">dictyocaulus</code>,
+      <code class="inline">skrjabinema</code>, <code class="inline">toxocara</code>,
+      <code class="inline">capillaria</code>, <code class="inline">giardia</code> —
+      report an identical per-class score in <i>both</i> the federated and
+      centralized results (0.1747 / 0.2554 respectively) — suspicious because
+      those numbers exactly equal each run's <i>overall</i> mAP50-95. Traced to
+      source: counting every label file in the original
+      <code class="inline">/Users/salvatorecapuozzo/kfm_250423_subdataset/export</code>
+      (15,766 files), four of those five classes have <b>zero</b> annotated
+      instances anywhere in the dataset, and the fifth (<code class="inline">giardia</code>)
+      has exactly <b>two</b>. Ultralytics' own metrics code fills in the overall
+      mean for classes it never evaluates, and <code class="inline">fedyolo_system</code>'s
+      summary writer reports that filler as if it were a measured score. It isn't
+      — these classes have no data to learn from, full stop, regardless of
+      federation strategy or config:</p>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Class</th><th class="num">Instances, whole dataset</th><th>Owned by</th><th>Reported "score"</th></tr></thead>
+        <tbody>
+          <tr class="row-crit"><td>dictyocaulus</td><td class="num">0</td><td>node_C</td><td class="wrap-cell">filler (= overall mAP), not real</td></tr>
+          <tr class="row-crit"><td>skrjabinema</td><td class="num">0</td><td>node_C</td><td class="wrap-cell">filler (= overall mAP), not real</td></tr>
+          <tr class="row-crit"><td>toxocara</td><td class="num">0</td><td>node_C</td><td class="wrap-cell">filler (= overall mAP), not real</td></tr>
+          <tr class="row-crit"><td>capillaria</td><td class="num">0</td><td>node_C</td><td class="wrap-cell">filler (= overall mAP), not real</td></tr>
+          <tr><td>giardia</td><td class="num">2</td><td>node_C</td><td class="wrap-cell">filler in val (both instances landed in train)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin-top:10px;">
+    All five are owned by <code class="inline">node_C</code>, which
+    <code class="inline">tools/split_dataset_into_nodes.py</code>'s balancing
+    algorithm loaded with 10 of the 20 declared classes — including 4 it can
+    structurally never learn. The other 16 classes range from 66 instances
+    (<code class="inline">eimeria_intricata</code>) to 9,104
+    (<code class="inline">calicophoron</code>) — roughly <b>140:1</b> — so even
+    the real per-class scores sit on a badly imbalanced base. Ultralytics
+    excludes zero-instance classes from the overall mAP average itself (so
+    0.303/0.446 aren't directly inflated by the filler rows), but the
+    per-class table is a quarter fake, node_C's model capacity is partly spent
+    on unlearnable channels, and the true per-class picture is worse-looking
+    than the headline number suggests once you know which rows to ignore.
+    </p>
+
+    <h3>The seven that came after it — none of them repeated the win</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Run folder</th><th>Date</th><th>Setup</th><th class="num">Federated mAP50</th><th class="num">Centralized mAP50</th></tr></thead>
+        <tbody>
+          <tr><td><code class="inline">kfm_250423_fed_260706</code></td><td>07-23</td><td class="wrap-cell">async, yolov8l@960</td><td class="num">—</td><td class="num">—</td></tr>
+          <tr class="row-crit"><td><code class="inline">kfm_250423_fed_260801/test_260801</code></td><td>08-01</td><td class="wrap-cell">async smoke test, yolov8n@640, 2 epochs/cycle</td><td class="num">0.000</td><td class="num">—</td></tr>
+          <tr><td><code class="inline">kfm_250423_fed_260801_full/run1</code></td><td>08-02</td><td class="wrap-cell">async, yolov8n@640, 1 epoch/cycle</td><td class="num">0.109</td><td class="num">0.111</td></tr>
+          <tr><td><code class="inline">kfm_250423_fed_260801_long/run1</code></td><td>08-02</td><td class="wrap-cell">async, yolov8n@640, 3 epochs/cycle</td><td class="num">—</td><td class="num">—</td></tr>
+          <tr class="row-crit"><td><code class="inline">kfm_250423_fed_260801_long/run2</code></td><td>08-02</td><td class="wrap-cell">same config, re-run</td><td class="num">0.000</td><td class="num">0.084</td></tr>
+          <tr><td><code class="inline">kfm_250423_fed_260801_long/run3</code></td><td>08-02</td><td class="wrap-cell">same config, re-run again</td><td class="num">0.036</td><td class="num">—</td></tr>
+          <tr><td><code class="inline">kfm_250423_fed_260801_full_filtered/*</code> <span class="mono" style="color:var(--muted)">(×7)</span></td><td>08-03</td><td class="wrap-cell">low-data classes dropped, yolov8l@960</td><td class="num">—</td><td class="num">0.221<span class="mono" style="color:var(--muted)">*</span></td></tr>
+          <tr><td><code class="inline">kfm_250423_target_map/run1</code>+<code class="inline">run2</code></td><td>08-03</td><td class="wrap-cell">target-seeking mode, target mAP50 0.8</td><td class="num">0.020<span class="mono" style="color:var(--muted)">†</span></td><td class="num">0.280<span class="mono" style="color:var(--muted)">†</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin-top:10px;">
+    "—" means the run has no <code class="inline">summary.json</code> at all —
+    training checkpoints and logs exist, but the run never reached (or
+    crashed before) the final evaluation write. <span class="mono">*</span> best
+    single epoch reached mid-run, not a completed comparison.
+    <span class="mono">†</span> centralized phase completed its full 25-epoch
+    budget without hitting the 0.8 target (best 0.280); the federated phase
+    only logged 4 submissions before stopping — not a finished run either.
+    Reading across all eight folders: <b>two hard collapses to exactly 0.000</b>
+    (both on the "long" config family, one of them <i>after</i> a longer epoch
+    budget than the July win), <b>three that never finished</b> long enough to
+    write a federated number, and <b>one weak-but-paired result</b>
+    (<code class="inline">full/run1</code>, both sides low together — reads
+    more like an under-trained smoke test than a federation-specific failure).
+    None of the later configs — bigger model (yolov8l), higher resolution
+    (960px), the class-filtered dataset, or target-seeking mode — reproduced
+    the July 4 run's success. That run's exact recipe (yolov8s, 480px, sync
+    mode, 100 epochs/node) is the one worth treating as the reference
+    configuration until a later attempt actually beats it end to end.</p>
+
+    <h3>Separately: the documented quickstart was broken on any machine</h3>
+    <div class="prose">
+      <p>Independent of the real-data results above, the <b>synthetic
+      quickstart</b> — the one path meant to run anywhere, no external
+      dataset required — didn't run at all before this pass, on this Mac or
+      any other. It fails before the first training step, for reasons that
+      have nothing to do with GPUs or the remote box. Reproduced and fixed:</p>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th style="min-width:230px">Blocker</th><th>Symptom</th><th>Fix applied</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="wrap-cell"><b>Missing dependency: <code class="inline">rich</code></b></td>
+            <td class="wrap-cell"><code class="inline">ModuleNotFoundError</code> on
+            <code class="inline">python -m fedyolo.simulate</code> — imported
+            unconditionally in <code class="inline">simulate.py</code> and
+            <code class="inline">server.py</code> for progress bars / live tables,
+            never listed in <code class="inline">requirements.txt</code>.</td>
+            <td class="wrap-cell">Added <code class="inline">rich>=13.0</code> to
+            <code class="inline">requirements.txt</code>.</td>
+          </tr>
+          <tr>
+            <td class="wrap-cell"><b>Missing dependency: <code class="inline">psutil</code></b></td>
+            <td class="wrap-cell">Soft-fails (warns, skips descendant-process
+            cleanup) rather than crashing, but silently degrades the
+            OOM-recovery path documented in <code class="inline">gpu_cleanup.py</code>.</td>
+            <td class="wrap-cell">Added <code class="inline">psutil>=5.9</code> to
+            <code class="inline">requirements.txt</code>.</td>
+          </tr>
+          <tr>
+            <td class="wrap-cell"><b>README quickstart uses a dead CLI flag</b></td>
+            <td class="wrap-cell"><code class="inline">--n-per-node 24</code> — the
+            script only accepts <code class="inline">--n-train</code> /
+            <code class="inline">--n-val</code>. <code class="inline">error: unrecognized arguments</code> before anything is generated.</td>
+            <td class="wrap-cell">README corrected to <code class="inline">--n-train 24 --n-val 8</code>.</td>
+          </tr>
+          <tr class="row-crit">
+            <td class="wrap-cell"><b>Example config and dataset generator disagree on classes</b></td>
+            <td class="wrap-cell"><code class="inline">configs/example_federation.yaml</code>
+            declared <code class="inline">circle / triangle / square</code>; the
+            actual <code class="inline">tools/make_synthetic_dataset.py</code>
+            hardcodes <code class="inline">ascaris / trichuris / hookworm</code>
+            (matching the README's own "Validated end-to-end" section). Config
+            validation rejects the mismatch before training starts — this is
+            the actual reason the documented quickstart cannot have worked as
+            written.</td>
+            <td class="wrap-cell"><code class="inline">example_federation.yaml</code>
+            rewritten to the real generator output — classes and node
+            <code class="inline">owned_classes</code> now match what the tool
+            produces.</td>
+          </tr>
+          <tr>
+            <td class="wrap-cell"><b>Doc / code mismatch: default pretrained weights</b></td>
+            <td class="wrap-cell">README and every config comment claim "random
+            (blank) init, no pretrained checkpoint downloaded." <code class="inline">fedyolo/config.py</code>'s
+            <code class="inline">ModelConfig.pretrained</code> now defaults to
+            <code class="inline">true</code> — the shared backbone is initialized
+            from an Ultralytics COCO checkpoint, downloaded on first use. Not a
+            crash, but a silent network dependency contradicting the "runs
+            offline in minutes" pitch.</td>
+            <td class="wrap-cell">Example config now sets
+            <code class="inline">model.pretrained: false</code> explicitly, with
+            a comment explaining the true default and how to opt back in.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>What running it actually looks like now</h3>
+    <pre><span class="c"># fedyolo_system/, this machine</span>
+pip install rich psutil          <span class="c"># now also pulled in by requirements.txt</span>
+python3 tools/make_synthetic_dataset.py --out data/synthetic --n-train 24 --n-val 8
+python3 -m fedyolo.simulate --config configs/example_federation.yaml --also-centralized
+
+<span class="c">Ultralytics 8.4.84 🚀 Python-3.10.13 torch-2.12.1 CPU (Apple M2 Pro)</span>
+<span class="c">[async] 3 nodes × 6 cycles = 18 total submissions</span>
+<span class="c">...</span>
+<span class="diff-add">Final federated   mAP50=0.7587  mAP50-95=0.2132</span>
+<span class="diff-add">Final centralized mAP50=0.8954  mAP50-95=0.5033</span>
+<span class="c">Wrote runs/example_federation/repo_verify_central/summary.json</span></pre>
+
+    <h3>Synthetic-set result, measured directly on this machine (a smoke test, not the real-data numbers above)</h3>
+    <div class="chart-card fed-chart">
+      <div class="chart-title">fedyolo_system · async mode · 3-class synthetic set</div>
+      <div class="chart-sub">Same run, same held-out pool — federated (class-decomposed aggregation) against the non-federated centralized baseline the tool trains for comparison.</div>
+      <div class="bar-row">
+        <div class="bar-label">Federated<br><span style="color:var(--muted);font-size:10.5px;">18 async submissions</span></div>
+        <div class="fed-bar-track">
+          <div class="fed-bar federated" style="width:76%;"><span class="bar-fig" style="position:static;margin-left:10px;color:#fff;">mAP50 0.759 · mAP50-95 0.213</span></div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Centralized<br><span style="color:var(--muted);font-size:10.5px;">same total epoch budget</span></div>
+        <div class="fed-bar-track">
+          <div class="fed-bar centralized" style="width:90%;"><span class="bar-fig" style="position:static;margin-left:10px;">mAP50 0.895 · mAP50-95 0.503</span></div>
+        </div>
+      </div>
+      <div class="bar-scale"><div></div><div class="ticks"><span>0</span><span>0.25</span><span>0.5</span><span>0.75</span><span>1.0 mAP50</span></div></div>
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin-top:10px;">
+    A second, federated-only run (no centralized baseline, otherwise identical
+    config) scored <b>mAP50 0.988</b> — on a 24-image-per-node synthetic set,
+    run-to-run variance is large and this is a functional check, not a
+    benchmark. The finding that matters isn't the exact number: it's that the
+    federated model lands in the <i>same order of magnitude</i> as its
+    centralized baseline (76–99% vs. 90%), where every legacy strategy in §2
+    loses 85–99% relative to its own local models. That gap is what the
+    class-decomposed head is for.</p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="mac-verify">
+    <div class="sec-head"><span class="sec-num">05</span><h2 class="sec-title">Verifying the gap, on this Mac, in minutes not hours</h2></div>
+    <div class="prose">
+      <p>The point of this pass wasn't a bigger mAP number — it was checking
+      whether the federated/centralized <i>gap</i> from the one real-data win
+      (§4, 68% of centralized mAP50) holds up once the 5 unlearnable/near-empty
+      classes are gone and the run is small enough to actually iterate on
+      locally. Using the new <code class="inline">balanced_fraction</code>
+      (§9) on the cleaned 15-class dataset: <b>class-stratified 10% subset,
+      sync mode, yolov8s@480 — same architecture as the July 4 run, cut from
+      20×5 to 5×2 epochs</b> (10 vs. 100 epochs/node). Calibrated first
+      (~110–115s/round at 1 local epoch) before committing to a full attempt.
+      One complete run took ~35 minutes end to end (20 min federated + 15 min
+      centralized) — small enough to run more than once in a sitting, which
+      is the actual point of shrinking it.</p>
+    </div>
+
+    <h3>Two attempts, same config — the ratio itself isn't stable</h3>
+    <div class="chart-card fed-chart">
+      <div class="chart-title">kfm_250423_clean · balanced 10% · yolov8s@480 · sync · 5 rounds × 2 local epochs</div>
+      <div class="chart-sub">Same config, only <code class="inline">seed</code> changed — federated vs. its own centralized baseline, both attempts.</div>
+      <div class="bar-row">
+        <div class="bar-label">Seed 0 · Federated<br><span style="color:var(--muted);font-size:10.5px;">75% of centralized</span></div>
+        <div class="fed-bar-track">
+          <div class="fed-bar federated" style="width:75%;"><span class="bar-fig" style="position:static;margin-left:10px;color:#fff;">mAP50 0.316</span></div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Seed 0 · Centralized<br><span style="color:var(--muted);font-size:10.5px;">reference</span></div>
+        <div class="fed-bar-track">
+          <div class="fed-bar centralized" style="width:100%;"><span class="bar-fig" style="position:static;margin-left:10px;">mAP50 0.420</span></div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Seed 1 · Federated<br><span style="color:var(--muted);font-size:10.5px;">65% of centralized</span></div>
+        <div class="fed-bar-track">
+          <div class="fed-bar federated" style="width:63%;"><span class="bar-fig" style="position:static;margin-left:10px;color:#fff;">mAP50 0.264</span></div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Seed 1 · Centralized<br><span style="color:var(--muted);font-size:10.5px;">reference</span></div>
+        <div class="fed-bar-track">
+          <div class="fed-bar centralized" style="width:97%;"><span class="bar-fig" style="position:static;margin-left:10px;">mAP50 0.407</span></div>
+        </div>
+      </div>
+      <div class="bar-scale"><div></div><div class="ticks"><span>0</span><span>0.15</span><span>0.30</span><span>0.45</span><span>0.60 mAP50</span></div></div>
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin-top:10px;">
+    Centralized is stable across seeds (0.420 vs. 0.407 mAP50, 3% apart —
+    expected run-to-run noise). <b>Federated is not</b>: 0.316 vs. 0.264 mAP50,
+    a 20% swing on the exact same config, budget, and data — landing the
+    federated/centralized ratio anywhere from <b>65% to 75-80%</b> depending
+    on nothing but the seed. Both attempts were still climbing at round 5 with
+    no sign of plateauing (seed 0 mAP50-95: 0.034→0.108→0.155→0.181→0.188;
+    seed 1: 0.034→0.093→0.125→0.146→<b>0.154</b>), so 10 epochs/node reads as
+    an early, noisy measurement in both cases, not a settled result — the
+    single July 4 run's 68% (§4) should be read the same way: one sample from
+    a distribution that's at least this wide, not a fixed number.</p>
+
+    <h3>What's consistent across both seeds, and what isn't</h3>
+    <p style="font-size:13px;color:var(--muted);">Federated ÷ centralized
+    mAP50-95, per class (both runs predate the AP50-per-class fix in §9;
+    later attempts report AP50 per class instead).</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Class</th><th class="num">Seed 0</th><th class="num">Seed 1</th><th>Read</th></tr></thead>
+        <tbody>
+          <tr class="row-crit"><td>ancylostoma</td><td class="num">23%</td><td class="num">7%</td><td class="wrap-cell">consistently weak, both seeds — the one reliable finding here</td></tr>
+          <tr class="row-crit"><td>strongyloides</td><td class="num">14%</td><td class="num">11%</td><td class="wrap-cell">consistently weak, both seeds</td></tr>
+          <tr class="row-crit"><td>eimeria_intricata</td><td class="num">0%</td><td class="num">0%</td><td class="wrap-cell">consistent total miss — 66 instances dataset-wide; reads as data scarcity at 10% sampling (centralized is weak here too, just not zero)</td></tr>
+          <tr><td>fasciola</td><td class="num">96%</td><td class="num">104%</td><td class="wrap-cell">consistently near/above parity</td></tr>
+          <tr><td>moniezia_benedeni</td><td class="num">93%</td><td class="num">101%</td><td class="wrap-cell">consistently near/above parity</td></tr>
+          <tr><td>calicophoron</td><td class="num">93%</td><td class="num">92%</td><td class="wrap-cell">consistently near parity</td></tr>
+          <tr><td>trichuris_trichiuria</td><td class="num">111%</td><td class="num">117%</td><td class="wrap-cell">consistently above centralized</td></tr>
+          <tr class="row-crit"><td>ascaris</td><td class="num">113%</td><td class="num">24%</td><td class="wrap-cell"><b>seed noise, not a real pattern</b> — seed 0 alone read as "federated wins," seed 1 contradicts it entirely</td></tr>
+          <tr class="row-crit"><td>strongili</td><td class="num">45%</td><td class="num">89%</td><td class="wrap-cell">seed noise — nearly 2× apart</td></tr>
+          <tr class="row-crit"><td>metastrongili</td><td class="num">221%</td><td class="num">17%</td><td class="wrap-cell">seed noise — both absolute values tiny, ratio is meaningless here</td></tr>
+          <tr><td>nematodirus</td><td class="num">106%</td><td class="num">87%</td><td class="wrap-cell">moderate seed variance, both respectable</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin-top:10px;">
+    This is the actual value of running it twice: <b>ancylostoma</b> and
+    <b>strongyloides</b> survive as real, repeatable weak points — both have
+    enough data to learn (3,135 and 839 instances dataset-wide) but federated
+    lands well behind centralized on them regardless of seed. Everything else
+    that looked like a pattern in seed 0 alone (ascaris and strongili
+    "beating" or "trailing" centralized, metastrongili's wild swing) turned
+    out to be noise once seed 1 came back. <b>Ascaris and ancylostoma are
+    owned by the same single node</b> (node_D, only those two classes,
+    identical training conditions) — ascaris is stable-and-fine, ancylostoma
+    is stable-and-bad, which rules out "node_D is broadly undertrained" and
+    points at something class-specific. Worth checking raw classifier logits
+    for ancylostoma (per the debugging recipe in
+    <code class="inline">fedyolo_system/README.md</code>) before assuming
+    it's a data problem too.</p>
+
+    <h3>Chasing ancylostoma: not a dead classifier — a damped one</h3>
+    <div class="prose">
+      <p>Per <code class="inline">fedyolo_system/README.md</code>'s debugging
+      recipe: loaded <code class="inline">mac_attempt_seed0</code>'s federated
+      and centralized checkpoints directly, ran both (no NMS, raw sigmoid
+      logits) on 8 real node_D validation images that actually contain an
+      ancylostoma box, and read off the ancylostoma channel's confidence
+      alongside every other class.</p>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Validation image</th><th class="num">Federated · ancylostoma</th><th class="num">Centralized · ancylostoma</th></tr></thead>
+        <tbody>
+          <tr><td>…08MAG24_2_micro_02_11</td><td class="num">0.022</td><td class="num">0.174</td></tr>
+          <tr><td>…08MAG24_2_micro_03_10</td><td class="num">0.200</td><td class="num">0.684</td></tr>
+          <tr><td>…08MAG24_2_micro_08_13</td><td class="num">0.044</td><td class="num">0.559</td></tr>
+          <tr><td>…08MAG24_micro_03_02</td><td class="num">0.146</td><td class="num">0.864</td></tr>
+          <tr><td>…08MAG24_micro_09_07</td><td class="num">0.074</td><td class="num">0.925</td></tr>
+          <tr><td>…19SET24_micro_00_00</td><td class="num">0.314</td><td class="num">0.649</td></tr>
+          <tr><td>…19SET24_micro_01_03</td><td class="num">0.189</td><td class="num">0.908</td></tr>
+          <tr><td>…19SET24_micro_01_12</td><td class="num">0.220</td><td class="num">0.802</td></tr>
+          <tr class="row-crit"><td><b>mean</b></td><td class="num"><b>0.151</b></td><td class="num"><b>0.696</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin-top:10px;">
+    Two things settled, one opened. Settled: the channel is <b>not stuck</b> —
+    on image 0's full 15-class vector, federated ancylostoma (0.022) is
+    already the model's 2nd-highest class score on that image, ahead of 13
+    other classes including ascaris (0.010) — it's discriminating correctly,
+    just weakly. And it's <b>not a node_D-wide problem</b> — ascaris, owned
+    by the identical node under identical training, tracks federated ≈
+    centralized fine elsewhere in this report; only ancylostoma shows this
+    4-6× confidence gap on its own positive examples. Opened: since
+    centralized handles the exact same node_D images at 0.70-0.93 confidence,
+    this isn't a data-scarcity story either (both models see the same
+    ancylostoma examples) — it's specifically the <i>aggregation</i> step
+    damping this one channel's learned weights more than it damps ascaris's,
+    which is a real, narrower question the shared/per-class architecture
+    split (below) doesn't yet answer. (Methodology note: raw resize, no
+    letterbox, so absolute confidences here won't exactly match Ultralytics'
+    own val pipeline — the federated-vs-centralized <i>gap</i>, both run
+    through identical preprocessing, is the reliable part.)</p>
+    <p style="font-size:13px;color:var(--muted);margin-top:10px;">
+    <span class="badge fix">update</span> This logit comparison ran on the
+    <i>sync</i> baseline checkpoint. The per-class grid further down shows
+    ancylostoma recovering to 0.50-0.55 AP50 in both async runs — the best
+    of any config tested — against 0.16-0.24 everywhere else. Sync's
+    round-barrier aggregation looks like a real part of the story, not just
+    a training-budget issue.</p>
+
+    <h3>Comparing configs on the same subset: async wins, no-pretrain collapses, pseudo-labeling is a wash</h3>
+    <div class="prose">
+      <p>Three more attempts, same <code class="inline">balanced_fraction: 0.10</code>
+      cleaned dataset, same yolov8s@480, each isolating exactly one variable
+      against the sync/pretrained/PL-off baseline above (seed 0) — so
+      "which is better" is a fair question here, not just louder numbers.</p>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Config</th><th class="wrap-cell">What changed</th><th class="num">Fed. mAP50</th><th class="num">Fed. mAP50-95</th><th class="num">Centralized mAP50</th><th>Fed / Cent</th></tr></thead>
+        <tbody>
+          <tr><td>A — baseline (seed 0)</td><td class="wrap-cell">—</td><td class="num">0.316</td><td class="num">0.188</td><td class="num">0.420</td><td>75%</td></tr>
+          <tr><td>A — baseline (seed 1)</td><td class="wrap-cell">—</td><td class="num">0.264</td><td class="num">0.154</td><td class="num">0.407</td><td>65%</td></tr>
+          <tr class="row-good"><td>B — async (seed 0)</td><td class="wrap-cell">mode: async (matched epoch budget)</td><td class="num">0.358</td><td class="num">0.211</td><td class="num">— <span class="mono" style="color:var(--muted)">(not re-run)</span></td><td>~87%<span class="mono" style="color:var(--muted)">*</span></td></tr>
+          <tr class="row-good"><td>B — async (seed 1)</td><td class="wrap-cell">mode: async, verification run</td><td class="num">0.365</td><td class="num">0.208</td><td class="num">0.362</td><td><b>101%</b></td></tr>
+          <tr class="row-crit"><td>C — from scratch</td><td class="wrap-cell">model.pretrained: false</td><td class="num">0.013</td><td class="num">0.005</td><td class="num">0.076</td><td>18%</td></tr>
+          <tr><td>D — pseudo-label fixed</td><td class="wrap-cell">start_round: 2 (was silently never firing)</td><td class="num">0.308</td><td class="num">0.188</td><td class="num">— <span class="mono" style="color:var(--muted)">(unaffected by PL)</span></td><td>~75%<span class="mono" style="color:var(--muted)">*</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin-top:10px;">
+    <span class="mono">*</span> Only seed 0's async run and D skip a matched
+    centralized re-run (sync/async and pseudo-labeling don't change
+    <code class="inline">centralized.py</code>'s training, so re-running it
+    there would just be a second noisy sample of the same number) — their
+    ratios are against baseline's centralized, not a matched pair. Per-class
+    figures for B and D are <b>AP50</b> (today's fix); A and C are AP50-95 —
+    only the overall scalars above are safely compared across all rows.</p>
+    <div class="twocol">
+      <div class="card">
+        <h3>Async <span class="badge good">verified — federated ≈ centralized</span></h3>
+        <p>Highest raw mAP50 of any attempt on this dataset in <i>both</i>
+        seeds, and seed 1's matched centralized run confirms it wasn't a
+        fluke: federated (0.365) essentially <b>matches</b> its own
+        centralized baseline (0.362) — 101%, the only run in this entire
+        investigation where federation costs nothing measurable. A real
+        reversal from the archival record (§4), where every async attempt on
+        the messy, phantom-class dataset collapsed or underperformed — clean
+        data looks like what async actually needed, not a different
+        aggregation mechanism.</p>
+      </div>
+      <div class="card">
+        <h3>From scratch <span class="badge bad">confirms pretrained matters</span></h3>
+        <p>Federated and centralized collapse together (0.013 / 0.076) —
+        at a 10-epoch/node budget, blank-weight YOLO genuinely can't learn
+        this task, exactly as the framework's own "honest caveats" warn.
+        This isolates the effect cleanly: <code class="inline">pretrained: true</code>
+        (the current default) isn't a minor tuning knob here, it's load-bearing.</p>
+      </div>
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin-top:14px;">
+    Pseudo-labeling actually turning on (D) landed statistically
+    indistinguishable from the baseline that never had it (0.308 vs. 0.316) —
+    inconclusive rather than a clear negative for the "shared macro-class
+    info" hypothesis (three rounds of exposure, weight 0.5, may just be too
+    little too late in a 5-round budget) — see below for what a more direct
+    test of that idea would look like.</p>
+
+
+    <h3>Bigger inputs, bigger models: does anyone reach "satisfying"?</h3>
+    <div class="prose">
+      <p>Three more attempts at the same 5×2-epoch, balanced-10% recipe,
+      each bumping exactly one capacity knob against the async/sync
+      baselines above: <b>async, verified with a second seed</b> (already
+      above); <b>yolov8s @ 640px</b> (was 480); <b>yolov8m @ 480px</b> (was
+      yolov8s). All three paired with their own centralized run this time —
+      capacity changes <i>do</i> change what centralized can reach, unlike
+      sync-vs-async or pseudo-labeling.</p>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Run</th><th class="wrap-cell">What changed</th><th class="num">Fed. mAP50</th><th class="num">Cent. mAP50</th><th>Fed / Cent</th></tr></thead>
+        <tbody>
+          <tr class="row-good"><td>async (seed 1)</td><td class="wrap-cell">mode: async</td><td class="num">0.365</td><td class="num">0.362</td><td><b>101%</b></td></tr>
+          <tr><td>sync baseline (seed 0)</td><td class="wrap-cell">—</td><td class="num">0.316</td><td class="num">0.420</td><td>75%</td></tr>
+          <tr><td>yolov8s @ 640</td><td class="wrap-cell">imgsz: 640 (was 480)</td><td class="num">0.329</td><td class="num">0.372</td><td>88%</td></tr>
+          <tr class="row-good"><td>yolov8m @ 480</td><td class="wrap-cell">arch: yolov8m (was yolov8s)</td><td class="num">0.350</td><td class="num"><b>0.455</b></td><td>77%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin-top:10px;">
+    Bigger model helps the most: yolov8m@480 gives centralized its highest
+    ceiling of any attempt (0.455 mAP50) and federated ticks up too (0.350) —
+    but the <i>ratio</i> barely moves (77%, same as the smaller baseline).
+    Bigger input alone (640px) helps less and costs more (~95 vs. ~70 min
+    wall-clock for the s@480 baseline) — resolution without more training
+    budget doesn't clearly pay for itself at this epoch count. Async still
+    beats both on raw federated mAP50, and remains the only config where
+    federating costs nothing measurable.</p>
+    <p style="font-size:13px;color:var(--muted);margin-top:10px;">
+    <b>Honest answer to "do centralized and federated reach satisfying
+    results": not yet, either of them.</b> Best centralized across every
+    attempt is 0.455 mAP50 (yolov8m@480); best federated is 0.365
+    (async, seed 1) — both well short of a usable detector, and neither
+    scaling knob closed most of the remaining distance in one step. The
+    <code class="inline">target_map</code> run's centralized phase (§4) was
+    still climbing linearly at epoch 25 of 25 without hitting even 0.8 mAP50
+    — at a 10-epoch/node budget, <b>training budget looks like the actual
+    bottleneck</b>, ahead of model size or resolution. Scaling capacity is
+    worth doing eventually, but the cheapest next lever is more rounds, not
+    a bigger model.</p>
+
+    <h3>Per-class comparison, all AP50-consistent runs</h3>
+    <p style="font-size:13px;color:var(--muted);">Federated AP50 per class,
+    darker = higher. Reading down a column shows which run handles that
+    class best; reading across a row shows how balanced (or spiky) that run
+    is. <code class="inline">eimeria_spp</code>, <code class="inline">eimeria_intricata</code>,
+    <code class="inline">dicrocoelium</code>, <code class="inline">trichuris</code>
+    stay pale everywhere — the data-scarcity floor from §5 above, not a
+    run-specific failure.</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Run</th><th style="writing-mode:vertical-rl;text-orientation:mixed;font-size:10.5px;">strongili</th><th style="writing-mode:vertical-rl;text-orientation:mixed;font-size:10.5px;">eimeria_spp</th><th style="writing-mode:vertical-rl;text-orientation:mixed;font-size:10.5px;">fasciola</th><th style="writing-mode:vertical-rl;text-orientation:mixed;font-size:10.5px;">eimeria_intricata</th><th style="writing-mode:vertical-rl;text-orientation:mixed;font-size:10.5px;">calicophoron</th><th style="writing-mode:vertical-rl;text-orientation:mixed;font-size:10.5px;">nematodirus</th><th style="writing-mode:vertical-rl;text-orientation:mixed;font-size:10.5px;">dicrocoelium</th><th style="writing-mode:vertical-rl;text-orientation:mixed;font-size:10.5px;">metastrongili</th><th style="writing-mode:vertical-rl;text-orientation:mixed;font-size:10.5px;">trichuris</th><th style="writing-mode:vertical-rl;text-orientation:mixed;font-size:10.5px;">strongyloides</th><th style="writing-mode:vertical-rl;text-orientation:mixed;font-size:10.5px;">moniezia_expansa</th><th style="writing-mode:vertical-rl;text-orientation:mixed;font-size:10.5px;">moniezia_benedeni</th><th style="writing-mode:vertical-rl;text-orientation:mixed;font-size:10.5px;">ascaris</th><th style="writing-mode:vertical-rl;text-orientation:mixed;font-size:10.5px;">ancylostoma</th><th style="writing-mode:vertical-rl;text-orientation:mixed;font-size:10.5px;">trichuris_trichiuria</th><th>mAP50</th></tr></thead>
+        <tbody>
+          <tr><td class="wrap-cell" style="white-space:nowrap;">async (seed 0)</td><td style="background:#327cd6;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.54</td><td style="background:#c4ddfa;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.03</td><td style="background:#165098;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.74</td><td style="background:#84b5f0;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.26</td><td style="background:#458fe7;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.46</td><td style="background:#13488a;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.80</td><td style="background:#cbe1fb;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.01</td><td style="background:#c5ddfa;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.03</td><td style="background:#c8dffa;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.02</td><td style="background:#408be6;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.48</td><td style="background:#c4dcfa;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.03</td><td style="background:#2c74cc;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.57</td><td style="background:#3886e4;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.50</td><td style="background:#4991e7;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.45</td><td style="background:#468fe7;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.46</td><td style="text-align:center;font-weight:600;font-variant-numeric:tabular-nums;">0.358</td></tr>
+          <tr><td class="wrap-cell" style="white-space:nowrap;">async (seed 1)</td><td style="background:#599be9;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.40</td><td style="background:#c5ddfa;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.03</td><td style="background:#0f3e79;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.89</td><td style="background:#b7d5f8;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.08</td><td style="background:#5b9cea;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.39</td><td style="background:#104382;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.83</td><td style="background:#7fb2ef;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.27</td><td style="background:#94bff2;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.20</td><td style="background:#8dbbf1;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.22</td><td style="background:#67a3eb;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.35</td><td style="background:#c6defa;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.03</td><td style="background:#5d9dea;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.39</td><td style="background:#4991e7;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.45</td><td style="background:#317bd5;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.55</td><td style="background:#5598e9;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.41</td><td style="text-align:center;font-weight:600;font-variant-numeric:tabular-nums;">0.365</td></tr>
+          <tr><td class="wrap-cell" style="white-space:nowrap;">PL-fixed</td><td style="background:#70a9ec;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.32</td><td style="background:#cde2fb;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.00</td><td style="background:#0f407c;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.87</td><td style="background:#cde2fb;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.00</td><td style="background:#3886e3;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.50</td><td style="background:#124789;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.80</td><td style="background:#c9dffa;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.01</td><td style="background:#cae0fb;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.01</td><td style="background:#cde2fb;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.00</td><td style="background:#c2dbf9;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.04</td><td style="background:#c8dffa;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.02</td><td style="background:#175199;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.74</td><td style="background:#317bd5;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.55</td><td style="background:#9fc6f4;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.16</td><td style="background:#286ec4;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.60</td><td style="text-align:center;font-weight:600;font-variant-numeric:tabular-nums;">0.308</td></tr>
+          <tr><td class="wrap-cell" style="white-space:nowrap;">yolov8s @ 640</td><td style="background:#7cb0ef;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.28</td><td style="background:#c7defa;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.02</td><td style="background:#10417e;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.85</td><td style="background:#c6defa;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.02</td><td style="background:#3581dd;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.52</td><td style="background:#1b5ba9;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.68</td><td style="background:#cbe1fb;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.01</td><td style="background:#afcff6;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.11</td><td style="background:#c0daf9;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.04</td><td style="background:#7fb2ef;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.27</td><td style="background:#b3d2f7;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.09</td><td style="background:#1b5aa7;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.68</td><td style="background:#286ec4;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.60</td><td style="background:#8ab9f1;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.23</td><td style="background:#3683df;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.52</td><td style="text-align:center;font-weight:600;font-variant-numeric:tabular-nums;">0.329</td></tr>
+          <tr><td class="wrap-cell" style="white-space:nowrap;">yolov8m @ 480</td><td style="background:#5095e8;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.43</td><td style="background:#cde2fb;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.00</td><td style="background:#10417f;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.85</td><td style="background:#cde2fb;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.00</td><td style="background:#2367ba;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.62</td><td style="background:#154d93;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.76</td><td style="background:#cce1fb;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.00</td><td style="background:#bdd8f9;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.06</td><td style="background:#cae0fb;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.01</td><td style="background:#a5c9f5;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.14</td><td style="background:#bcd8f8;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.06</td><td style="background:#0f3e7a;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.89</td><td style="background:#3079d3;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.55</td><td style="background:#87b7f0;color:#0b0b0b;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.24</td><td style="background:#2265b7;color:#ffffff;text-align:center;font-variant-numeric:tabular-nums;font-size:11.5px;">0.63</td><td style="text-align:center;font-weight:600;font-variant-numeric:tabular-nums;">0.350</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin-top:10px;">
+    <code class="inline">ancylostoma</code> (§5's flagged weak point) is
+    visibly the palest column among the well-represented classes in every
+    row except the two async seeds (0.50, 0.55) — exactly consistent with
+    the raw-logit finding above that async narrows this specific gap too,
+    not just the aggregate number.</p>
+
+    <h3>Open question: does per-class loss masking waste the shared "it's an egg" signal?</h3>
+    <div class="prose">
+      <p>All 15 classes here are the same macro object — parasite eggs —
+      just different species. Since a node's loss is masked to exactly zero
+      for classes it doesn't own (<code class="inline">client.py</code>'s
+      <code class="inline">class_weights</code>), could that be throwing
+      away a cross-species "there's an egg here" signal that would help
+      every node, even ones that never see a given species?</p>
+      <p>Partly already answered by the architecture itself:
+      <code class="inline">fedyolo/model.py</code>'s shared/per-class split
+      puts the backbone, neck, box-regression branch, DFL, <i>and</i> the two
+      feature-mixing convs inside the classification branch
+      (<code class="inline">cv3.{i}.0</code>, <code class="inline">.1</code>)
+      in the shared, FedAvg'd-across-everyone bucket — only the final 1×1
+      per-class projection (<code class="inline">cv3.{i}.2</code>) is gated.
+      So the entire visual representation, right up to the last layer, is
+      already pooled across all four nodes regardless of species ownership.
+      The genuine gap: loss masking zeroes a node's contribution
+      <i>everywhere</i> for an unowned class, not just "don't suppress it" —
+      so no node ever explicitly says "some egg, unknown species, is here,"
+      even though its own boxes are exactly that evidence in aggregate.</p>
+      <p><code class="inline">pseudo_label.py</code> is the framework's existing
+      answer to this gap — cross-round self-distillation from the previous
+      global model for not-owned classes — which is why fixing its silently-broken
+      <code class="inline">start_round</code> (config D, above) was the cheapest
+      available test of the hypothesis. It came back inconclusive, not negative.
+      A more direct test, if the hypothesis is worth pursuing further: add
+      one <b>new, class-agnostic output channel</b> — binary "egg vs.
+      background," never claiming which species — trained on the union of
+      each node's owned-class boxes as positives. Because it never names a
+      species, every node can supply full positive <i>and</i> negative
+      supervision for it with no cross-node suppression risk (the exact
+      problem loss-masking exists to prevent for the per-species channels).
+      That's a model change, not a config flag — worth building only if a
+      longer/cleaner pseudo-labeling test (more rounds, higher weight) shows
+      the underlying idea has legs first.</p>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="compat">
+    <div class="sec-head"><span class="sec-num">06</span><h2 class="sec-title">macOS · Apple M2 Pro · 16 GB — compatibility audit</h2></div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Component</th><th>Status</th><th class="wrap-cell">Notes</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code class="inline">fedyolo_system</code>, <code class="inline">device: cpu</code></td>
+            <td><span class="badge good">verified</span></td>
+            <td class="wrap-cell">Full 18-submission async smoke run: <b>106 s</b> wall clock, <b>≈803 MB</b> peak resident memory (<code class="inline">/usr/bin/time -l</code>). 16 GB of headroom is not the constraint for anything this repo currently ships as a "quickstart."</td>
+          </tr>
+          <tr>
+            <td><code class="inline">fedyolo_system</code>, <code class="inline">device: mps</code></td>
+            <td><span class="badge good">verified</span></td>
+            <td class="wrap-cell">Ultralytics reports <code class="inline">MPS (Apple M2 Pro)</code> and trains/evaluates correctly — no unimplemented-op errors hit on this arch/imgsz. Not in any shipped config; set it explicitly for GPU acceleration.</td>
+          </tr>
+          <tr>
+            <td>Original <code class="inline">kfm_250423_fed_*.yaml</code> configs (archival)</td>
+            <td><span class="badge warn">still hardcode a device</span></td>
+            <td class="wrap-cell">7 of 9 hardcode <code class="inline">device: cuda</code>, tuned against the remote 8 GB CUDA box; <code class="inline">torch.cuda.is_available()</code> is <code class="inline">False</code> here, so these still raise on this Mac as-is. Left untouched as a historical record of what was actually run (see §4) rather than silently rewritten.</td>
+          </tr>
+          <tr>
+            <td><code class="inline">federation.device: auto</code></td>
+            <td><span class="badge fix">added this pass</span></td>
+            <td class="wrap-cell">New default in <code class="inline">fedyolo/config.py</code> — resolves to CUDA/MPS/CPU per-machine at load time. <code class="inline">example_federation.yaml</code> and the new <code class="inline">kfm_250423_clean.yaml</code> (§5) use it; <code class="inline">split_dataset_into_nodes.py --config-out</code> now generates it by default too. Verified live on this Mac (auto-selected MPS, no config edit).</td>
+          </tr>
+          <tr>
+            <td>Legacy <code class="inline">client_updated.py</code> / <code class="inline">server_updated.py</code></td>
+            <td><span class="badge good">portable</span></td>
+            <td class="wrap-cell">No hardcoded <code class="inline">"cuda"</code> anywhere — device is read off <code class="inline">trainer.device</code> / tensor <code class="inline">.device</code>, so Ultralytics' own MPS auto-detect applies. Both live under <code class="inline">legacy/</code> now (§7); their <code class="inline">.env</code> loading and <code class="inline">server_node/</code> paths were fixed to anchor to that new location.</td>
+          </tr>
+          <tr>
+            <td><code class="inline">legacy/server.py</code> / <code class="inline">server_v2.py</code> / <code class="inline">client_v2.py</code></td>
+            <td><span class="badge fix">fixed this pass</span></td>
+            <td class="wrap-cell">Hardcoded <code class="inline">/datadrive/DAFYOLO/...</code> — see §7 for the full list and <code class="inline">legacy/server_paths.yaml</code>/<code class="inline">server_paths.py</code>, which now replaces it, auto-picking a macOS or Linux profile. (<code class="inline">client.py</code>/<code class="inline">server.py</code>, the first-generation pair these superseded, were removed this pass — git-recoverable, see §8.)</td>
+          </tr>
+          <tr>
+            <td>Legacy dependency list</td>
+            <td><span class="badge fix">added</span></td>
+            <td class="wrap-cell">New <code class="inline">legacy/requirements.txt</code> (torch, ultralytics, pyyaml, paramiko, python-dotenv) — previously only implicit imports. <code class="inline">fedyolo_system/requirements.txt</code> was fixed separately (see below).</td>
+          </tr>
+          <tr>
+            <td>Remote-server workflow (<code class="inline">legacy/run_experiments.py</code>)</td>
+            <td><span class="badge neu">n/a for solo Mac use</span></td>
+            <td class="wrap-cell">Defaults to an SSH/<code class="inline">paramiko</code> connection to a separate GPU server; already supports a fully local mode (<code class="inline">CONNECTION_MODE = 'local'</code>, prompted interactively) that needs no second machine.</td>
+          </tr>
+          <tr>
+            <td>Sync-mode <code class="inline">ProcessPoolExecutor</code></td>
+            <td><span class="badge good">safe</span></td>
+            <td class="wrap-cell"><code class="inline">fedyolo/server.py</code> explicitly requests <code class="inline">mp.get_context("spawn")</code> — the correct, macOS-default start method; no fork-related crashes expected.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="paths">
+    <div class="sec-head"><span class="sec-num">07</span><h2 class="sec-title">Legacy files moved to <code class="inline" style="font-size:inherit">legacy/</code>; hardcoded Linux paths now in one config</h2></div>
+    <div class="prose">
+      <p><span class="badge fix">update</span> Every root-level file specific
+      to the legacy system now lives under <code class="inline">legacy/</code>
+      — scripts, their working-state directories (<code class="inline">server_node/</code>,
+      <code class="inline">uploads/</code>, <code class="inline">datasets/</code>,
+      <code class="inline">runs/</code>, the per-class client data folders), and
+      the three substantive analysis docs. <code class="inline">fedyolo_system/</code>
+      is untouched, and this field report stays at the repo root since it
+      covers both. See the root <code class="inline">README.md</code> for the
+      full map.</p>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Was (repo root)</th><th>Now</th></tr></thead>
+        <tbody>
+          <tr><td><code class="inline">client_updated.py</code>, <code class="inline">client_v2.py</code>, <code class="inline">server_updated.py</code>, <code class="inline">server_v2.py</code>, <code class="inline">run_experiments.py</code>, <code class="inline">check_server_running.py</code>, <code class="inline">diagnose_connection.py</code></td><td class="wrap-cell"><code class="inline">legacy/</code> (unchanged filenames)</td></tr>
+          <tr><td><code class="inline">client.py</code>, <code class="inline">server.py</code></td><td class="wrap-cell"><span class="badge fix">removed</span> — fully superseded first-gen pair, git-recoverable</td></tr>
+          <tr><td><code class="inline">.env</code>, <code class="inline">server_paths.py</code>/<code class="inline">.yaml</code>, <code class="inline">VOC_local.yaml</code>, per-class data (<code class="inline">client_*_data/</code>), <code class="inline">datasets/</code>, <code class="inline">uploads/</code>, <code class="inline">global_models/</code>, <code class="inline">runs/</code>, <code class="inline">yolo26n.pt</code>, <code class="inline">meta.json</code>, etc.</td><td class="wrap-cell"><code class="inline">legacy/</code></td></tr>
+          <tr><td><code class="inline">ANALYSIS_AND_FIXES.md</code>, <code class="inline">FIXES_IMPLEMENTATION.md</code>, <code class="inline">ALTERNATIVE_STRATEGIES.md</code></td><td class="wrap-cell"><code class="inline">legacy/</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin-top:10px;">
+    Three CWD-dependent assumptions had to be fixed for scripts to still work
+    from their new location, regardless of where they're launched from:
+    <code class="inline">client_updated.py</code>/<code class="inline">client_v2.py</code>
+    called <code class="inline">load_dotenv()</code> with no path (searches
+    upward from the process's CWD, not the script's folder — would miss
+    <code class="inline">legacy/.env</code> entirely unless launched with
+    <code class="inline">legacy/</code> itself as CWD); <code class="inline">server_updated.py</code>'s
+    <code class="inline">BASE_DIR = "server_node"</code> was a bare relative
+    string. All three now anchor to <code class="inline">os.path.dirname(os.path.abspath(__file__))</code>
+    the same way <code class="inline">server_paths.py</code> already does.
+    Verified after the move: both compile, <code class="inline">server_paths</code>'s
+    auto-detected paths resolve under <code class="inline">legacy/</code>
+    correctly regardless of CWD, and <code class="inline">.env</code> loads.</p>
+
+    <h3>The hardcoded paths themselves</h3>
+    <p>Found by grepping the whole repo for <code class="inline">/datadrive</code>
+    and <code class="inline">/home/</code>.</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>File</th><th>What was hardcoded</th><th>Now reads from</th></tr></thead>
+        <tbody>
+          <tr><td><code class="inline">server.py</code> <span class="mono" style="color:var(--muted)">(removed)</span>, <code class="inline">server_v2.py</code></td><td class="wrap-cell"><code class="inline">UPLOAD_DIR</code>/<code class="inline">GLOBAL_MODEL_DIR</code>/<code class="inline">PROCESSED_DIR</code> = <code class="inline">/datadrive/DAFYOLO/{uploads,global_model,processed_models}</code></td><td class="wrap-cell"><code class="inline">legacy/server_paths.py</code></td></tr>
+          <tr><td><code class="inline">client.py</code> <span class="mono" style="color:var(--muted)">(removed)</span>, <code class="inline">client_v2.py</code></td><td class="wrap-cell"><code class="inline">SERVER_UPLOAD_DIR</code>/<code class="inline">SERVER_DOWNLOAD_DIR</code> = same two <code class="inline">/datadrive/...</code> paths (the client's view of the server)</td><td class="wrap-cell"><code class="inline">legacy/server_paths.py</code></td></tr>
+          <tr><td><code class="inline">check_server_running.py</code></td><td class="wrap-cell"><code class="inline">cd /datadrive/DAFYOLO</code> and <code class="inline">tail /datadrive/DAFYOLO/server.log</code> in two print/exec strings</td><td class="wrap-cell"><code class="inline">legacy/server_paths.py</code> (<code class="inline">linux_gpu_box</code> profile by default — see note below)</td></tr>
+          <tr><td><code class="inline">diagnose_connection.py</code></td><td class="wrap-cell"><code class="inline">/datadrive/DAFYOLO/global_model/server_info.json</code> and <code class="inline">.../global_model.pt</code> in two SFTP checks</td><td class="wrap-cell"><code class="inline">legacy/server_paths.py</code> (same default)</td></tr>
+          <tr><td><code class="inline">VOC_local.yaml</code></td><td class="wrap-cell"><code class="inline">path: /home/salvatorecapuozzo/DAFYOLO/datasets/VOC</code></td><td class="wrap-cell">made relative (<code class="inline">datasets/VOC</code>) — no machine-specific variant needed, it only ever points at its own sibling folder</td></tr>
+          <tr><td><code class="inline">fedyolo_system/README.md</code></td><td class="wrap-cell">one example command: <code class="inline">--dataset /home/salvatorecapuozzo/kfm_250423_subdataset/export</code></td><td class="wrap-cell">kept as the Linux example, with a second block added for <code class="inline">/Users/salvatorecapuozzo/kfm_250423_subdataset/export</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3>The config: <code class="inline">legacy/server_paths.yaml</code></h3>
+    <p>One file, two profiles — duplicate the block for any other machine you add:</p>
+    <pre>linux_gpu_box:
+  upload_dir:         /datadrive/DAFYOLO/uploads
+  global_model_dir:   /datadrive/DAFYOLO/global_model
+  processed_dir:      /datadrive/DAFYOLO/processed_models
+  server_log:         /datadrive/DAFYOLO/server.log
+  kfm_dataset_source: /home/salvatorecapuozzo/kfm_250423_subdataset/export
+
+macos_laptop:
+  upload_dir:         server_node/uploads
+  global_model_dir:   server_node/global_model
+  processed_dir:      server_node/processed_models
+  server_log:         server_node/server.log
+  kfm_dataset_source: /Users/salvatorecapuozzo/kfm_250423_subdataset/export</pre>
+    <p style="font-size:13px;color:var(--muted);"><code class="inline">server_paths.py</code>
+    picks a profile automatically (<code class="inline">Darwin</code> →
+    <code class="inline">macos_laptop</code>, else <code class="inline">linux_gpu_box</code>)
+    or from <code class="inline">DAFYOLO_SERVER_PROFILE</code> — except
+    <code class="inline">check_server_running.py</code> and
+    <code class="inline">diagnose_connection.py</code>, which SSH <i>into</i> the
+    remote box to inspect it, so they default to <code class="inline">linux_gpu_box</code>
+    regardless of which OS you're running the diagnostic <i>from</i> (override
+    the same env var if your server itself isn't that profile). The
+    relative-path values above (<code class="inline">macos_laptop</code>'s
+    <code class="inline">server_node/...</code>) resolve against
+    <code class="inline">server_paths.py</code>'s own directory
+    (<code class="inline">legacy/</code>) rather than the caller's CWD, so they
+    work the same way regardless of where a script is launched from.</p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="docs">
+    <div class="sec-head"><span class="sec-num">08</span><h2 class="sec-title">Documentation audit</h2></div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>File</th><th>Verdict</th><th class="wrap-cell">Notes</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code class="inline">README.md</code> <span class="mono" style="color:var(--muted)">(root)</span></td>
+            <td><span class="badge fix">rewritten</span></td>
+            <td class="wrap-cell">Was two lines (a title and an empty "How to use" heading). Now describes both systems, points to <code class="inline">legacy/</code> vs. <code class="inline">fedyolo_system/</code>, and links each one's own <code class="inline">requirements.txt</code>.</td>
+          </tr>
+          <tr>
+            <td><code class="inline">fedyolo_system/DAFYOLO_system_description.md</code></td>
+            <td><span class="badge good">accurate</span></td>
+            <td class="wrap-cell">Checked against current <code class="inline">server.py</code> / <code class="inline">model.py</code>: staleness formula, delta-aggregation logic, class-conditional averaging and the pseudo-label mechanism all match the shipped code. The most trustworthy document in the repo.</td>
+          </tr>
+          <tr>
+            <td><code class="inline">fedyolo_system/README.md</code></td>
+            <td><span class="badge fix">fixed in this pass</span></td>
+            <td class="wrap-cell">Broken quickstart CLI flag and a config/generator class mismatch, both in §4 — corrected in place. The "no pretrained checkpoint" claim is now qualified against the actual default.</td>
+          </tr>
+          <tr>
+            <td><code class="inline">legacy/ANALYSIS_AND_FIXES.md</code>, <code class="inline">FIXES_IMPLEMENTATION.md</code>, <code class="inline">ALTERNATIVE_STRATEGIES.md</code></td>
+            <td><span class="badge warn">numbers hold, some line-refs drifted</span></td>
+            <td class="wrap-cell">Dated 2026-05-04/05, committed to git 2026-08-19 in the same commit that last touched <code class="inline">client_updated.py</code>. Headline 4–17% collapse figures are corroborated by the raw logs in §2. At least one specific claim (duplicate <code class="inline">train()</code> call) no longer matches current code — see §3. Moved into <code class="inline">legacy/</code> this pass (content unchanged).</td>
+          </tr>
+          <tr>
+            <td><code class="inline">VISUAL_SUMMARY.md</code>, <code class="inline">README_ANALYSIS.md</code>, <code class="inline">DOCUMENT_INDEX.md</code>, <code class="inline">START_HERE.md</code>, <code class="inline">IMPLEMENTATION_PROGRESS.md</code></td>
+            <td><span class="badge fix">removed</span></td>
+            <td class="wrap-cell">Pure summaries/navigation over the three docs above, confirmed to have no inbound links from anything kept. All five were git-tracked, so <code class="inline">git checkout HEAD~ -- &lt;file&gt;</code> brings any of them back if needed.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin-top:10px;">
+    Also removed this pass, by request: the fully-superseded first-generation
+    <code class="inline">client.py</code>/<code class="inline">server.py</code>
+    (git-tracked, recoverable); six months of superseded local-strategy run
+    output — <code class="inline">runs_old/</code> through
+    <code class="inline">runs_old4/</code>, <code class="inline">runs_option3/</code>,
+    <code class="inline">old_clients/</code> (~390 MB, untracked, not recoverable);
+    and stray junk (<code class="inline">fedyolo_system/=2.12</code> and two
+    siblings — leftovers from an unquoted <code class="inline">pip install "pkg&gt;=x"</code>
+    — plus a stray checkpoint and test image). <code class="inline">client_v2.py</code>/<code class="inline">server_v2.py</code>
+    were kept — <code class="inline">server_v2.py</code> is the only place the
+    experimental DFKD merge strategy lives.</p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="next">
+    <div class="sec-head"><span class="sec-num">09</span><h2 class="sec-title">Where to spend the next hour, week, and sprint</h2></div>
+    <div class="twocol">
+      <div class="card">
+        <h3>Already done, this pass <span class="badge fix">applied</span></h3>
+        <ul class="plain">
+          <li><code class="inline">fedyolo_system/requirements.txt</code> and
+          <code class="inline">configs/example_federation.yaml</code> fixed
+          (§4); <code class="inline">legacy/requirements.txt</code> added; all
+          hardcoded-path files repointed at <code class="inline">legacy/server_paths.yaml</code>
+          (§7); every legacy file relocated into <code class="inline">legacy/</code>
+          (§7) with its CWD-dependent path assumptions fixed to match.</li>
+          <li><b><code class="inline">configs/kfm_250423_clean.yaml</code></b> —
+          the real dataset re-split with the 5 phantom/near-phantom classes
+          dropped (<code class="inline">data/kfm_250423_clean/</code>, 15
+          real classes, instance counts now balanced 9.9k–10.1k per node),
+          hyperparameters matching the 2026-07-04 recipe.</li>
+          <li><b><code class="inline">federation.device</code> now defaults to
+          <code class="inline">"auto"</code></b> — resolves to CUDA, else
+          Apple MPS, else CPU at config-load time
+          (<code class="inline">fedyolo/config.py</code>), so a config moves
+          between the remote GPU box and this Mac with no edit. Verified with
+          a live re-run (mAP50 0.758, MPS auto-selected, no config change).
+          <code class="inline">tools/split_dataset_into_nodes.py</code>'s
+          <code class="inline">--config-out</code> generator now writes
+          <code class="inline">auto</code> too.</li>
+          <li><b><code class="inline">federation.balanced_fraction</code></b> —
+          new class-stratified subsampling (<code class="inline">fedyolo/sampling.py</code>),
+          applied to train <i>and</i> the pooled eval set alike (unlike the
+          existing <code class="inline">data_fraction</code>, which only ever
+          touched train and takes a naive, non-class-aware prefix slice). Used
+          to run real-dataset attempts on this Mac in minutes instead of
+          hours — see §5.</li>
+          <li><b>Per-class metric switched from AP50-95 to AP50</b>
+          (<code class="inline">fedyolo/evaluate.py</code>'s new
+          <code class="inline">per_class_map50()</code>, used by both
+          <code class="inline">simulate.py</code>'s
+          <code class="inline">summary.json</code> and the live table's
+          Best/Worst-class columns) — Ultralytics doesn't expose a
+          ready-made per-class AP50 array the way it does for AP50-95
+          (<code class="inline">metrics.box.maps</code>), only AP50 values
+          indexed by which classes had validation instances, so this rebuilds
+          it with the same nc-length-with-fallback shape. Applies going
+          forward only — attempt 2 in §5 was already running when this
+          landed and still reports AP50-95 per class.</li>
+          <li>Re-verify the specific line-number claims in
+          <code class="inline">ANALYSIS_AND_FIXES.md</code> against current
+          <code class="inline">client_updated.py</code>/<code class="inline">server_updated.py</code>
+          before implementing any single one — at least one (§3) is stale.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>This week <span class="badge good">already underway</span></h3>
+        <ul class="plain">
+          <li class="wrap-cell"><s>Rebuild the dataset split with the phantom
+          classes dropped</s> — done, <code class="inline">data/kfm_250423_clean/</code>
+          (§4/§5). <s>Re-run the recipe more than once before trusting it</s>
+          — done, §5: two attempts, same config, only the seed differed.</li>
+          <li class="wrap-cell"><s>Chase <code class="inline">ancylostoma</code>
+          specifically</s> — done, §5: raw logits confirm the channel isn't
+          dead (correctly ranks 2nd of 15 on a positive image) and it isn't
+          node_D-wide (ascaris, same node, is fine) — federated genuinely
+          learns ancylostoma, just at 4-6× lower confidence than centralized
+          on identical images. Narrows to: <b>why does aggregation damp this
+          one channel specifically</b>, when it doesn't damp ascaris? Next
+          concrete step: repeat this same logit comparison across training
+          rounds (not just the final checkpoint) to see whether the gap opens
+          gradually (aggregation drift) or is there from round 1 (assignment/init).</li>
+          <li><b>Don't trust a single run's per-class story</b> — §5 showed
+          "ascaris beats centralized" and "strongili lags" were both seed
+          noise, not real patterns. Any future per-class claim needs ≥2 seeds
+          before it goes in a report.</li>
+          <li>Give it more training budget before concluding it's plateaued —
+          neither Mac attempt's mAP50-95 had flattened by round 5, and the
+          <code class="inline">target_map</code> run's centralized phase was
+          still improving linearly at epoch 25 of 25 (best 0.28, target 0.8).</li>
+          <li class="wrap-cell"><s>Replicate the async result</s> — done, §5:
+          seed 1 confirms it with a matched centralized run (federated 0.365
+          vs. centralized 0.362 — 101%, essentially no federation cost).
+          <s>Try bigger inputs/models</s> — done, §5: yolov8m@480 raises the
+          centralized ceiling to 0.455 (highest of any attempt) but the
+          federated/centralized <i>ratio</i> doesn't move; yolov8s@640 helps
+          less than either. Neither reaches a "satisfying" absolute number —
+          training budget, not capacity, looks like the real bottleneck now.</li>
+          <li><b>Give async, specifically, more training budget</b> — it's
+          both the best-performing config <i>and</i> the one still furthest
+          from its own ceiling (mAP50-95 was still climbing hardest of any
+          run at cutoff). Highest-value next run in this whole investigation.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="card" style="margin-top:20px;">
+      <h3>Bigger picture</h3>
+      <p style="margin-bottom:0;">Every legacy strategy shares one root cause
+      (§3): five backbones trained from random initialization on disjoint
+      classes, averaged together with no shared feature space to land in. That
+      argues for retiring the strategy-selector approach rather than continuing
+      to add an eighth merge heuristic to it. <code class="inline">fedyolo_system</code>'s
+      class-decomposed head is a structural fix for exactly that failure mode
+      — and on the cleaned real data, in async mode specifically, verified
+      across two seeds, federation now costs <b>nothing measurable</b>
+      (mAP50 101% of centralized). Sync mode lands lower and noisier
+      (65-80%), and every async attempt in the archival record (§4) on the
+      messier pre-cleanup dataset had collapsed — together that points at
+      data quality as the actual cause of those earlier async failures, not
+      the aggregation mechanism itself. Bigger model capacity (§5) raises the
+      absolute ceiling (0.455 mAP50, the best of any attempt) without moving
+      that ratio, and neither centralized nor federated reaches a genuinely
+      satisfying number yet at this epoch budget — the <code class="inline">target_map</code>
+      run's centralized phase (§4) was still climbing at epoch 25 of 25
+      without hitting 0.8. The remaining open items are narrow: <code class="inline">ancylostoma</code>'s
+      aggregation-damping (§5, confirmed via raw logits on the sync baseline)
+      is visibly weaker in both async runs (AP50 0.50 and 0.55 — the best of
+      any config, see the per-class grid in §5) than in sync/bigger-model
+      runs (0.16-0.24) — worth confirming whether async's continuous,
+      staleness-discounted updates are structurally why, rather than the
+      round-barrier FedAvg sync uses; and whether giving async more rounds —
+      the cheapest lever available, cheaper than a bigger model — closes the
+      rest of the distance to "satisfying." Both are debugging and budget
+      work, not a redesign.</p>
+    </div>
+  </section>
+
+</main>
+</div>
+
+<div class="wrap">
+  <footer>
+    <span>Generated on Apple M2 Pro · 16 GB · macOS arm64 · Python 3.10.13 · torch 2.12.1 · ultralytics 8.4.84</span>
+    <span>All fedyolo_system numbers reproduced live for this report — see §4 for exact commands</span>
+  </footer>
+</div>
+
+</body>
+</html>

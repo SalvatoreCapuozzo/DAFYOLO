@@ -4,3 +4,8 @@ ultralytics>=8.3
 pyyaml>=6.0
 Pillow>=10.0
 numpy>=1.24
+rich>=13.0       # terminal UI (progress bars, live mAP table) -- simulate.py/server.py
+                 # import this unconditionally; the run crashes with
+                 # ModuleNotFoundError before this was added here.
+psutil>=5.9      # gpu_cleanup.py's descendant-process cleanup; degrades to a
+                 # warning (not a crash) if missing, but install it for full behavior.

@@ -260,17 +260,13 @@ def main():
                 "mode": "async",          # "async" or "sync"
 
                 # ── shared (both modes) ────────────────────────────────────
-                "local_epochs": 5,        # epochs per round max_concurrent_nodes: int = 1   # how many nodes may train simultaneously in async mode
-                                    # 1 = sequential execution with async semantics (safe default)
-                                    # >1 = true parallelism; requires enough RAM for N models
-                                    #      simultaneously (each yolov8l at imgsz=960 ≈ 1–2 GB)
-                                    # (sync) / per cycle (async)
+                "local_epochs": 5,        # epochs per round (sync) / per cycle (async)
                 "batch_size": 8,
                 "lr0": 0.0008,
                 "warmup_steps": 20,
                 "grad_clip": 10.0,
                 "workers": 0,
-                "device": "cuda",          # "cuda" if GPU available
+                "device": "auto",          # resolves to CUDA/MPS/CPU per-machine at load time
 
                 # ── sync only (ignored when mode: async) ───────────────────
                 "rounds": 5,

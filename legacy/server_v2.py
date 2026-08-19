@@ -8,10 +8,10 @@ import copy
 from datetime import datetime
 from ultralytics import YOLO
 
+from server_paths import UPLOAD_DIR, GLOBAL_MODEL_DIR, PROCESSED_DIR
 # --- Server Config ---
-UPLOAD_DIR = "/datadrive/DAFYOLO/uploads"
-GLOBAL_MODEL_DIR = "/datadrive/DAFYOLO/global_model"
-PROCESSED_DIR = "/datadrive/DAFYOLO/processed_models"
+# Paths come from server_paths.yaml (macos_laptop / linux_gpu_box), picked
+# automatically by OS or via DAFYOLO_SERVER_PROFILE -- see server_paths.py.
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(GLOBAL_MODEL_DIR, exist_ok=True)

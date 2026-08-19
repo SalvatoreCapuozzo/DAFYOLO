@@ -29,7 +29,11 @@ def patched_sppf_init(self, c1, c2, k=5, *args, **kwargs):
 block.C3k2.__init__ = patched_c3k2_init
 block.SPPF.__init__ = patched_sppf_init
 
-BASE_DIR = "server_node"
+# Anchored to this script's own directory (not the caller's CWD) so it
+# resolves the same way regardless of where server_updated.py is launched
+# from -- and matches client_updated.py's LOCAL_SERVER_BASE_DIR, which is
+# anchored to ITS OWN script directory the same way, for local-mode use.
+BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "server_node")
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 GLOBAL_MODEL_DIR = os.path.join(BASE_DIR, "global_model")
 ARCHIVE_DIR = os.path.join(GLOBAL_MODEL_DIR, "archive")
