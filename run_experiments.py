@@ -14,19 +14,22 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 env_path = os.path.join(script_dir, '.env')
 load_dotenv(env_path)
 
+import client_updated
+
 from client_updated import (
     SERVER_IP, SSH_PORT, SSH_USER, SSH_PASSWORD, SERVER_UPLOAD_DIR,
-    setup_local_dataset, ssh_transfer, download_global_model,
+    setup_local_dataset, upload_to_server, download_global_model,
     LOCAL_MODELS_DIR, DOWNLOADED_MODELS_DIR
 )
 
 if not SERVER_IP or not SSH_USER or not SSH_PASSWORD:
     raise ValueError(f"\n❌ CRITICAL: Missing credentials!\nCheck your .env file inside {script_dir}")
 
-STRATEGIES = ['fedhead', 'stitch', 'ties', 'fedavg', 'yoloinc']
-MAX_IMAGES = 2000
-EPOCHS = 20
-RESULTS_FILE = "advanced_experiment_results.txt"
+#STRATEGIES = ['fedhead', 'stitch', 'ties', 'fedavg', 'yoloinc', 'yolopa_neckhead']
+STRATEGIES = ['fedhead', 'fedavg', 'fedprox', 'yoloinc']
+MAX_IMAGES = 800 #2000
+EPOCHS = 10
+RESULTS_FILE = "advanced_experiment_results_260505_1800.txt"
 
 SCENARIOS = {
     "EXTREME_NON_IID": [
@@ -47,16 +50,24 @@ SCENARIOS = {
 
 def trigger_server_reset_headless(strategy):
     print(f"\n📡 Sending command to server: RESET and switch to {strategy.upper()}")
+    cmd_data = {"command": "reset", "strategy": strategy, "timestamp": str(datetime.now())}
     try:
-        with open("CMD_RESET.json", "w") as f:
-            json.dump({"command": "reset", "strategy": strategy, "timestamp": str(datetime.now())}, f)
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(hostname=SERVER_IP, port=SSH_PORT, username=SSH_USER, password=SSH_PASSWORD, look_for_keys=False, allow_agent=False, timeout=15)
-        sftp = ssh.open_sftp()
-        sftp.put("CMD_RESET.json", f"{SERVER_UPLOAD_DIR}/CMD_RESET.json")
-        sftp.close(); ssh.close(); os.remove("CMD_RESET.json")
-    except Exception as e: print(f"❌ Failed to send reset command: {e}")
+        if client_updated.CONNECTION_MODE == "local":
+            upload_dir = os.path.join(client_updated.LOCAL_SERVER_BASE_DIR, "uploads")
+            os.makedirs(upload_dir, exist_ok=True)
+            with open(os.path.join(upload_dir, "CMD_RESET.json"), "w") as f:
+                json.dump(cmd_data, f)
+        else:
+            with open("CMD_RESET.json", "w") as f:
+                json.dump(cmd_data, f)
+            ssh = paramiko.SSHClient()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            ssh.connect(hostname=SERVER_IP, port=SSH_PORT, username=SSH_USER, password=SSH_PASSWORD, look_for_keys=False, allow_agent=False, timeout=15)
+            sftp = ssh.open_sftp()
+            sftp.put("CMD_RESET.json", f"{SERVER_UPLOAD_DIR}/CMD_RESET.json")
+            sftp.close(); ssh.close(); os.remove("CMD_RESET.json")
+    except Exception as e: 
+        print(f"❌ Failed to send reset command: {e}")
 
 # =====================================================================
 # SUBPROCESS WORKER SCRIPTS (Written dynamically to disk)
@@ -131,7 +142,7 @@ def train_and_send_headless(target_class_names, strategy, node_name):
 
     best_weights = os.path.abspath(f"runs/detect/{client_run_name}/weights/best.pt")
     if os.path.exists(best_weights):
-        ssh_transfer(client_run_name, best_weights, target_class_names, num_samples)
+        upload_to_server(client_run_name, best_weights, target_class_names, num_samples)
 
 def validate_and_compare_headless(strategy, scenario_name, log_file, clients):
     print(f"\n📊 Running Evaluation for Strategy: {strategy.upper()} | Scenario: {scenario_name}")
@@ -211,6 +222,20 @@ def validate_and_compare_headless(strategy, scenario_name, log_file, clients):
         f.write("=" * 50 + "\n")
 
 if __name__ == "__main__":
+    print("\n=== DAFYOLO Automated Experiments ===")
+    print("How is your server running?")
+    print("  [1] Remote Server")
+    print("  [2] Local Server")
+    
+    conn_choice = input("Select connection mode (1-2): ").strip()
+    if conn_choice == '2':
+        client_updated.CONNECTION_MODE = 'local'
+        print(f"\n📂 Default local path: {client_updated.LOCAL_SERVER_BASE_DIR}")
+        local_path = input("Press Enter to use default, or type custom path: ").strip()
+        if local_path: client_updated.LOCAL_SERVER_BASE_DIR = local_path
+    else:
+        client_updated.CONNECTION_MODE = 'remote'
+
     with open(RESULTS_FILE, "w") as f:
         f.write(f"DAFYOLO ADVANCED EXPERIMENTS\nDate: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
 

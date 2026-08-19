@@ -274,3 +274,15 @@ python -m fedyolo.simulate \
     --config configs/from_global_federation.yaml \
     --also-centralized
 ```
+Example:
+```
+python tools/split_dataset_into_nodes.py \
+    --dataset /home/salvatorecapuozzo/kfm_250423_subdataset/export \
+    --out data/kfm_250423 \
+    --n-nodes 4 \
+    --drop-classes bubble,dirt \
+    --config-out configs/kfm_250423_fed_260713.yaml
+python -m fedyolo.simulate \
+    --config configs/kfm_250423_fed_260706.yaml \
+    --also-centralized
+```

@@ -1,19 +1,33 @@
 global_classes:
-  - circle
-  - triangle
-  - square
-
+- strongili
+- eimeria_spp
+- fasciola
+- eimeria_intricata
+- calicophoron
+- dictyocaulus
+- nematodirus
+- dicrocoelium
+- metastrongili
+- trichuris
+- skrjabinema
+- toxocara
+- strongyloides
+- moniezia_expansa
+- moniezia_benedeni
+- capillaria
+- giardia
+- ascaris
+- ancylostoma
+- trichuris_trichiuria
 model:
-  arch: yolov8n.yaml   # Ultralytics architecture yaml — random (blank) init, no pretrained download
-  imgsz: 256           # input resolution; keep >=256 for small objects (see README)
-
+  arch: yolov8l.yaml
+  imgsz: 640
 federation:
   # ── mode selector ────────────────────────────────────────────────────────
   mode: async          # "sync"  → classic FedAvg barrier (FedServer)
                        # "async" → immediate delta aggregation (AsyncFedServer)
-
   # ── shared (both modes) ──────────────────────────────────────────────────
-  local_epochs: 5      # training epochs per round (sync) or per cycle (async)
+  local_epochs: 10      # training epochs per round (sync) or per cycle (async)
   batch_size: 4
   lr0: 0.0008
   warmup_steps: 20     # linear LR warmup at start of every round/cycle
@@ -22,7 +36,7 @@ federation:
   device: cpu          # set to "cuda" if GPU available
 
   # ── sync only (ignored when mode: async) ─────────────────────────────────
-  rounds: 4            # federated rounds; total epochs/node = rounds × local_epochs
+  rounds: 5            # federated rounds; total epochs/node = rounds × local_epochs
 
   # ── async only (ignored when mode: sync) ─────────────────────────────────
   async_node_cycles: 6          # pull→train→push cycles per node
@@ -32,25 +46,44 @@ federation:
                                 # staleness = global_version_now − version_when_node_pulled
                                 # 0.0 → ignore staleness (no discount)
                                 # 1.0 → strong discount (halved weight at staleness=1)
-
+  max_concurrent_nodes: 1
   pseudo_label:
     enabled: true
     start_round: 2     # sync: round index; async: per-node cycle index
     conf_thresh: 0.6
     weight: 0.5
-
 nodes:
-  - name: node_A
-    data_yaml: data/synthetic/node_A/data.yaml
-    owned_classes: [circle, triangle]   # local label 0→circle, 1→triangle
-
-  - name: node_B
-    data_yaml: data/synthetic/node_B/data.yaml
-    owned_classes: [square]             # local label 0→square
-
-  - name: node_C
-    data_yaml: data/synthetic/node_C/data.yaml
-    owned_classes: [circle, square]     # local label 0→circle, 1→square
-
-output_dir: runs/example_federation
+- name: node_A
+  data_yaml: data/kfm_250423/node_A/data.yaml
+  owned_classes:
+  - eimeria_spp
+  - calicophoron
+  - trichuris
+  - moniezia_expansa
+- name: node_B
+  data_yaml: data/kfm_250423/node_B/data.yaml
+  owned_classes:
+  - fasciola
+  - metastrongili
+  - moniezia_benedeni
+  - trichuris_trichiuria
+- name: node_C
+  data_yaml: data/kfm_250423/node_C/data.yaml
+  owned_classes:
+  - strongili
+  - eimeria_intricata
+  - dictyocaulus
+  - nematodirus
+  - dicrocoelium
+  - skrjabinema
+  - toxocara
+  - strongyloides
+  - capillaria
+  - giardia
+- name: node_D
+  data_yaml: data/kfm_250423/node_D/data.yaml
+  owned_classes:
+  - ascaris
+  - ancylostoma
+output_dir: runs/kfm_250423_fed_260706
 seed: 0

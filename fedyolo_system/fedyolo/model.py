@@ -19,19 +19,88 @@ across every node regardless of which classes that node owns.
 
 from __future__ import annotations
 
+import logging
 import re
 
 import torch
 from ultralytics.nn.tasks import DetectionModel
 
+log = logging.getLogger("fedyolo.model")
 
-def build_model(arch: str, nc: int, imgsz: int) -> DetectionModel:
-    """Build a YOLOv8 detection model with random (blank) weights -- no
-    pretrained checkpoint is downloaded or loaded.
+# Per-arch cache of {shared_key: pretrained_tensor}, populated on first use.
+# build_model() is called very often (once per node per round/cycle), so
+# without this every call would re-load the .pt checkpoint from disk.
+_PRETRAINED_SHARED_CACHE: dict[str, dict] = {}
+
+
+def build_model(arch: str, nc: int, imgsz: int, pretrained: bool = True) -> DetectionModel:
+    """Build a YOLOv8 detection model.
+
+    pretrained=True (default): the class-agnostic SHARED parameters --
+    backbone, neck, box-regression branch, DFL, and the two feature-mixing
+    convs inside cv3 -- are initialized from the architecture's official
+    COCO-pretrained checkpoint (e.g. yolov8m.yaml -> yolov8m.pt). This is
+    exactly the SHARED half of the per-class/shared split this module is
+    built around (see module docstring), so it transfers with zero change
+    to the federated aggregation or loss-masking logic downstream.
+
+    The per-class head (cv3.{i}.2) always stays randomly initialized
+    regardless of `pretrained`: its shape depends on `nc`, which will not
+    match COCO's 80 classes for a custom class set, so there's no principled
+    way to transfer it anyway.
+
+    pretrained=False reproduces the original from-scratch (fully blank)
+    behavior -- training from random initialization end to end.
     """
     model = DetectionModel(cfg=arch, nc=nc, verbose=False)
     model.args = _default_train_args(imgsz)
+    if pretrained:
+        shared_state = _load_pretrained_shared_state(arch, model)
+        if shared_state:
+            sd = model.state_dict()
+            sd.update(shared_state)
+            model.load_state_dict(sd)
     return model
+
+
+def _load_pretrained_shared_state(arch: str, model: DetectionModel) -> dict:
+    """Return {key: tensor} for every SHARED (non-per-class) key in `model`
+    that also exists with a matching shape in `arch`'s official COCO
+    checkpoint. Falls back to an empty dict (pure random init, with a
+    warning) if the checkpoint can't be fetched -- a transient network/
+    download failure shouldn't take down every node's training."""
+    if arch in _PRETRAINED_SHARED_CACHE:
+        return _PRETRAINED_SHARED_CACHE[arch]
+
+    ckpt_name = arch.replace(".yaml", ".pt")
+    try:
+        from ultralytics import YOLO
+        pretrained_sd = YOLO(ckpt_name).model.state_dict()
+    except Exception as exc:
+        log.warning(f"[pretrained] could not load {ckpt_name} ({exc}) -- falling back to random init")
+        _PRETRAINED_SHARED_CACHE[arch] = {}
+        return {}
+
+    per_class_keys = {k for pair in per_class_param_names(model) for k in pair}
+    own_sd = model.state_dict()
+    shared_pretrained = {}
+    skipped = []
+    for k, v in own_sd.items():
+        if k in per_class_keys:
+            continue
+        if k in pretrained_sd and pretrained_sd[k].shape == v.shape:
+            shared_pretrained[k] = pretrained_sd[k].clone()
+        else:
+            skipped.append(k)
+
+    n_shared = len(own_sd) - len(per_class_keys)
+    log.info(
+        f"[pretrained] {ckpt_name}: loaded {len(shared_pretrained)}/{n_shared} shared-parameter "
+        f"tensors (per-class head stays random -- class count differs from COCO's 80)"
+        + (f"; {len(skipped)} shared keys had no shape match and stay random too" if skipped else "")
+    )
+    _PRETRAINED_SHARED_CACHE[arch] = shared_pretrained
+    return shared_pretrained
 
 
 def _default_train_args(imgsz: int):

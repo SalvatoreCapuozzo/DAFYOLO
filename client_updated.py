@@ -13,6 +13,10 @@ from ultralytics.models.yolo.detect import DetectionTrainer
 
 load_dotenv(override=True)
 
+# Force Ultralytics dataset root into the repo workspace for local runs
+script_dir = os.path.dirname(os.path.abspath(__file__))
+settings['datasets_dir'] = os.path.abspath(os.path.join(script_dir, 'datasets'))
+
 # ==============================================================================
 # YOLO26 C3k2 AND SPPF COMPATIBILITY PATCH
 # ==============================================================================
@@ -40,8 +44,12 @@ SERVER_IP = os.getenv("SERVER_IP", "").strip().replace('"', '').replace("'", "")
 SSH_USER = os.getenv("REMOTE_USER", "").strip().replace('"', '').replace("'", "")
 SSH_PASSWORD = os.getenv("PASSWORD", "").strip().replace('"', '').replace("'", "")
 
-SERVER_UPLOAD_DIR = "/datadrive/DAFYOLO/uploads"
-SERVER_DOWNLOAD_DIR = "/datadrive/DAFYOLO/global_model"
+SERVER_UPLOAD_DIR = "server_node/uploads"
+SERVER_DOWNLOAD_DIR = "server_node/global_model"
+
+# --- Connection Mode Globals ---
+CONNECTION_MODE = "remote" 
+LOCAL_SERVER_BASE_DIR = os.path.abspath(os.path.join(script_dir, "server_node"))
 
 LOCAL_MODELS_DIR = "runs/detect"
 DOWNLOADED_MODELS_DIR = "global_models"
@@ -67,11 +75,91 @@ class SmartFLTrainer(DetectionTrainer):
         is_round_1 = "global_model" not in str(trainer.args.model)
         strategy = getattr(self, 'strategy', 'fedhead')
         
-        if strategy == 'yoloinc':
-            for param in trainer.model.parameters(): param.requires_grad = True
-            print("\n🧠 [SmartFL] Mode: YOLO-INC (Full Model Training)\n")
+        # 1. Capture global weights for FedProx proximal regularization
+        if strategy == 'fedprox':
+            self.global_weights_dict = {
+                name: param.clone().detach().to(trainer.device)
+                for name, param in trainer.model.named_parameters()
+            }
+            self.mu = 0.05
+            for module in trainer.model.modules():
+                if isinstance(module, torch.nn.modules.batchnorm._BatchNorm):
+                    module.momentum = 0.1
+            for param in trainer.model.parameters():
+                param.requires_grad = True
+            print(f"\n🧠 [SmartFL] Mode: FEDPROX (Full Model, Proximal Regularization)\n")
+            return
+
+        # 2. Capture global weights for contrastive mathematical anchors (FedCon)
+        if not is_round_1 and strategy == 'fedcon':
+            self.global_weights_dict = {
+                name: param.clone().detach().to(trainer.device)
+                for name, param in trainer.model.named_parameters()
+            }
+            self.mu = 0.05               
+            self.head_temperature = 0.1  
+        
+        # 3. UNFREEZE THE NETWORK (FedCon & YOLOINC)
+        if strategy in ['yoloinc', 'fedcon']:
+            for module in trainer.model.modules():
+                if isinstance(module, torch.nn.modules.batchnorm._BatchNorm):
+                    module.momentum = 0.1 
+            for param in trainer.model.parameters(): 
+                param.requires_grad = True
+            print(f"\n🧠 [SmartFL] Mode: {strategy.upper()} (Full Model Unfrozen & Learning with Calibrated Loss)\n")
             return
             
+        # 3. ULTRAFLWR YOLO-PA (Partial Aggregation)
+        if strategy.startswith('yolopa_'):
+            parts = strategy.split('_')[1]
+            update_backbone = 'backbone' in parts
+            update_neck = 'neck' in parts
+            update_head = 'head' in parts
+            
+            detect_idx = len(trainer.model.model) - 1
+            
+            frozen, unfrozen = 0, 0
+            for name, param in trainer.model.named_parameters():
+                try:
+                    mod_idx = int(name.split('.')[1])
+                except (IndexError, ValueError):
+                    mod_idx = -1
+                    
+                is_backbone = 0 <= mod_idx <= 9
+                is_neck = 10 <= mod_idx < detect_idx
+                is_head = mod_idx == detect_idx
+                
+                if (is_backbone and update_backbone) or \
+                   (is_neck and update_neck) or \
+                   (is_head and update_head):
+                    param.requires_grad = True
+                    unfrozen += 1
+                else:
+                    param.requires_grad = False
+                    frozen += 1
+            
+            # UltraFlwr locks BN stats for frozen components to prevent distribution shift
+            for name, module in trainer.model.named_modules():
+                if isinstance(module, torch.nn.modules.batchnorm._BatchNorm):
+                    try:
+                        mod_idx = int(name.split('.')[1])
+                    except (IndexError, ValueError):
+                        mod_idx = -1
+                    is_backbone = 0 <= mod_idx <= 9
+                    is_neck = 10 <= mod_idx < detect_idx
+                    is_head = mod_idx == detect_idx
+                    
+                    if not ((is_backbone and update_backbone) or \
+                           (is_neck and update_neck) or \
+                           (is_head and update_head)):
+                        module.track_running_stats = False
+                        module.eval()
+            
+            print(f"\n🧠 [SmartFL] Mode: UltraFlwr YOLO-PA ({parts.upper()})")
+            print(f"🧠 [SmartFL] Parameters -> Frozen: {frozen} | Trainable: {unfrozen}\n")
+            return
+
+        # 4. LEGACY FREEZING (FedHead, Stitch, etc.)
         detect_idx = len(trainer.model.model) - 1
         detect_prefix = f'model.{detect_idx}.'
         
@@ -91,38 +179,39 @@ class SmartFLTrainer(DetectionTrainer):
                     else:
                         param.requires_grad = False; frozen += 1
 
-        print(f"\n🧠 [SmartFL] Mode: {'FULL HEAD (Round 1)' if is_round_1 else 'FINAL LAYER ONLY (Round 2+)'}")
-        print(f"🧠 [SmartFL] Parameters -> Frozen: {frozen} | Trainable: {unfrozen}\n")
+        if strategy == 'stitch':
+            for module in trainer.model.modules():
+                if isinstance(module, torch.nn.modules.batchnorm._BatchNorm):
+                    module.track_running_stats = False
+                    module.eval()  
+            print(f"\n🧠 [SmartFL] Mode: Stitch (BN frozen to prevent feature drift)\n")
+        else:
+            print(f"\n🧠 [SmartFL] Mode: {'FULL HEAD (Round 1)' if is_round_1 else 'FINAL LAYER ONLY (Round 2+)'}")
+            print(f"🧠 [SmartFL] Parameters -> Frozen: {frozen} | Trainable: {unfrozen}\n")
+
+    @torch.no_grad()
+    def optimizer_step(self):
+        strategy = getattr(self, 'strategy', 'fedhead')
+        if strategy == 'fedprox' and hasattr(self, 'global_weights_dict'):
+            scale = self.scaler.get_scale()
+            for name, param in self.model.named_parameters():
+                if param.grad is not None and name in self.global_weights_dict:
+                    global_w = self.global_weights_dict[name].to(param.device)
+                    prox_grad = self.mu * (param.data - global_w)
+                    param.grad.data.add_(prox_grad * scale)
+
+        if strategy == 'fedcon' and hasattr(self, 'global_weights_dict'):
+            scale = self.scaler.get_scale()
+            for name, param in self.model.named_parameters():
+                if param.grad is not None and name in self.global_weights_dict:
+                    global_w = self.global_weights_dict[name].to(param.device)
+                    contrastive_grad = self.mu * (param.data - global_w)
+                    if 'cv3' in name or 'one2one_cv3' in name:
+                        contrastive_grad *= (1.0 / self.head_temperature)
+                    param.grad.data.add_(contrastive_grad * scale)
+        super().optimizer_step()
 
 
-def fetch_server_info():
-    print(f"\n🔄 Connecting to {SERVER_IP} to handshake with server...")
-    try:
-        ssh = _ssh_connect()
-        sftp = ssh.open_sftp()
-        try:
-            sftp.get(f"{SERVER_DOWNLOAD_DIR}/server_info.json", "local_server_info.json")
-            with open("local_server_info.json", "r") as f: info = json.load(f)
-            sftp.close(); ssh.close()
-            return info
-        except FileNotFoundError:
-            sftp.close(); ssh.close()
-            raise ValueError("Server is not running or hasn't initialized.")
-    except Exception as e:
-        print(f"❌ Handshake failed: {e}"); return None
-
-
-def download_global_model(strategy):
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    local_path = os.path.join(DOWNLOADED_MODELS_DIR, f"global_model_{strategy}_{ts}.pt")
-    try:
-        ssh = _ssh_connect()
-        sftp = ssh.open_sftp()
-        sftp.get(f"{SERVER_DOWNLOAD_DIR}/global_model.pt", local_path)
-        sftp.close(); ssh.close()
-        if os.path.getsize(local_path) < 1000: os.remove(local_path); return None
-        return local_path
-    except Exception: return None
 
 
 def setup_local_dataset(target_class_names, node_name="interactive", max_images=None):
@@ -134,9 +223,13 @@ def setup_local_dataset(target_class_names, node_name="interactive", max_images=
 
     datasets_root = settings['datasets_dir']
     base_dir = os.path.join(datasets_root, 'VOC')
-    if not os.path.exists(base_dir):
-        try: YOLO(model_name).train(data="VOC.yaml", epochs=0, imgsz=640)
-        except Exception: pass
+    if not os.path.exists(base_dir) or not any(os.path.exists(os.path.join(base_dir, ldir)) for ldir, _ in [('labels/train', 'images/train'), ('labels/train2012', 'images/train2012'), ('labels', 'images')]):
+        os.makedirs(base_dir, exist_ok=True)
+        try:
+            YOLO(model_name).train(data='VOC.yaml', epochs=0, imgsz=640)
+        except Exception as e:
+            print(f"❌ Failed to prepare VOC dataset in {base_dir}: {e}")
+            raise
 
     for ldir, idir in [('labels/train', 'images/train'), ('labels/train2012', 'images/train2012'), ('labels', 'images')]:
         labels_dir = os.path.join(base_dir, ldir)
@@ -196,18 +289,6 @@ def setup_local_dataset(target_class_names, node_name="interactive", max_images=
     return yaml_path, f"client_{node_name}", len(splits['train'])
 
 
-def ssh_transfer(client_id, weights_path, class_names, num_samples=100):
-    print(f"\nUploading {weights_path} to server...")
-    ssh = _ssh_connect(); sftp = ssh.open_sftp()
-    sftp.put(weights_path, f"{SERVER_UPLOAD_DIR}/{client_id}_weights.pt")
-    if isinstance(class_names, str): class_names = [class_names]
-    meta = {"client_id": client_id, "class_names": class_names, "num_samples": num_samples}
-    with open("meta.json", "w") as f: json.dump(meta, f)
-    sftp.put("meta.json", f"{SERVER_UPLOAD_DIR}/{client_id}_meta.json")
-    sftp.close(); ssh.close()
-    print("✅ Transfer complete!")
-
-
 def train_and_send():
     server_info = fetch_server_info()
     if not server_info: return
@@ -220,6 +301,8 @@ def train_and_send():
     
     limit_input = input("Max images? (Enter for ALL): ").strip()
     max_images = int(limit_input) if limit_input.isdigit() else None
+
+    
     
     yaml_path, client_id, num_samples = setup_local_dataset(target_class_names, node_name, max_images)
     ts = datetime.now().strftime("%Y%m%d_%H%M")
@@ -240,15 +323,24 @@ def train_and_send():
     SmartFLTrainer.strategy = strategy
 
     print(f"\n🚀 Training starting -> {client_run_name}")
+    print(f"\n🚀 Training starting -> {client_run_name}")
     trainer = SmartFLTrainer(overrides=dict(
         model=starting_model, data=yaml_path, epochs=50, imgsz=640,
-        name=client_run_name, lr0=0.01, patience=15
+        name=client_run_name, lr0=0.01, patience=15,
+        # ==========================================
+        # CRITICAL RAM FIXES FOR FULL-MODEL TRAINING
+        # ==========================================
+        batch=4,        # Forces a tiny batch size to save VRAM
+        workers=2,      # Stops multi-processing from copying the model into System RAM
+        cache=False,    # Prevents dataset from being loaded entirely into RAM
+        close_mosaic=0  # Disables a highly memory-intensive augmentation
+        # ==========================================
     ))
     trainer.train()
 
     best_weights = os.path.abspath(f"runs/detect/{client_run_name}/weights/best.pt")
     if os.path.exists(best_weights):
-        ssh_transfer(client_run_name, best_weights, target_class_names, num_samples)
+        upload_to_server(client_run_name, best_weights, target_class_names, num_samples)
 
 
 def select_file_interactive(prompt_text, search_pattern):
@@ -372,20 +464,104 @@ def run_inference():
     print("✅ Inference complete. Check runs/detect/predict/")
 
 
+def upload_to_server(client_id, weights_path, class_names, num_samples=100):
+    """Dynamically routes file transfer via SSH or Local OS copy."""
+    print(f"\nUploading {weights_path} to server ({CONNECTION_MODE.upper()} mode)...")
+    if isinstance(class_names, str): class_names = [class_names]
+    meta = {"client_id": client_id, "class_names": class_names, "num_samples": num_samples}
+    
+    if CONNECTION_MODE == "local":
+        upload_dir = os.path.join(LOCAL_SERVER_BASE_DIR, "uploads")
+        os.makedirs(upload_dir, exist_ok=True)
+        shutil.copy(weights_path, os.path.join(upload_dir, f"{client_id}_weights.pt"))
+        with open(os.path.join(upload_dir, f"{client_id}_meta.json"), "w") as f:
+            json.dump(meta, f)
+    else:
+        ssh = _ssh_connect(); sftp = ssh.open_sftp()
+        sftp.put(weights_path, f"{SERVER_UPLOAD_DIR}/{client_id}_weights.pt")
+        with open("meta.json", "w") as f: json.dump(meta, f)
+        sftp.put("meta.json", f"{SERVER_UPLOAD_DIR}/{client_id}_meta.json")
+        sftp.close(); ssh.close()
+        if os.path.exists("meta.json"): os.remove("meta.json")
+        
+    print("✅ Transfer complete!")
+
+def fetch_server_info():
+    print(f"\n🔄 Connecting to server ({CONNECTION_MODE.upper()} mode) to handshake...")
+    try:
+        if CONNECTION_MODE == "local":
+            info_path = os.path.join(LOCAL_SERVER_BASE_DIR, "global_model", "server_info.json")
+            if not os.path.exists(info_path):
+                raise ValueError("Server is not running or hasn't initialized.")
+            with open(info_path, "r") as f: return json.load(f)
+        else:
+            ssh = _ssh_connect(); sftp = ssh.open_sftp()
+            try:
+                sftp.get(f"{SERVER_DOWNLOAD_DIR}/server_info.json", "local_server_info.json")
+                with open("local_server_info.json", "r") as f: info = json.load(f)
+                sftp.close(); ssh.close()
+                return info
+            except FileNotFoundError:
+                sftp.close(); ssh.close()
+                raise ValueError("Server is not running or hasn't initialized.")
+    except Exception as e:
+        print(f"❌ Handshake failed: {e}"); return None
+
+def download_global_model(strategy):
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    local_path = os.path.join(DOWNLOADED_MODELS_DIR, f"global_model_{strategy}_{ts}.pt")
+    try:
+        if CONNECTION_MODE == "local":
+            remote_path = os.path.join(LOCAL_SERVER_BASE_DIR, "global_model", "global_model.pt")
+            if not os.path.exists(remote_path): return None
+            shutil.copy(remote_path, local_path)
+        else:
+            ssh = _ssh_connect(); sftp = ssh.open_sftp()
+            sftp.get(f"{SERVER_DOWNLOAD_DIR}/global_model.pt", local_path)
+            sftp.close(); ssh.close()
+            
+        if os.path.getsize(local_path) < 1000: os.remove(local_path); return None
+        return local_path
+    except Exception: return None
+
 def trigger_server_reset():
     print("\n⚠️ WARNING: This will archive the server's current global model.")
     confirm = input("Are you sure you want to reset the server session? (y/N): ").strip().lower()
     if confirm == 'y':
         try:
-            with open("CMD_RESET.json", "w") as f: json.dump({"command": "reset", "timestamp": str(datetime.now())}, f)
-            ssh = _ssh_connect(); sftp = ssh.open_sftp()
-            sftp.put("CMD_RESET.json", f"{SERVER_UPLOAD_DIR}/CMD_RESET.json")
-            sftp.close(); ssh.close(); os.remove("CMD_RESET.json")
+            cmd_data = {"command": "reset", "timestamp": str(datetime.now())}
+            if CONNECTION_MODE == "local":
+                upload_dir = os.path.join(LOCAL_SERVER_BASE_DIR, "uploads")
+                os.makedirs(upload_dir, exist_ok=True)
+                with open(os.path.join(upload_dir, "CMD_RESET.json"), "w") as f:
+                    json.dump(cmd_data, f)
+            else:
+                with open("CMD_RESET.json", "w") as f: json.dump(cmd_data, f)
+                ssh = _ssh_connect(); sftp = ssh.open_sftp()
+                sftp.put("CMD_RESET.json", f"{SERVER_UPLOAD_DIR}/CMD_RESET.json")
+                sftp.close(); ssh.close(); os.remove("CMD_RESET.json")
             print("✅ Reset command sent!")
         except Exception as e: print(f"❌ Failed to send reset command: {e}")
 
 
 if __name__ == "__main__":
+    print("\n=== DAFYOLO Connection Setup ===")
+    print("How is your server running?")
+    print("  [1] Remote Server (via SSH to Cloud/Remote Machine)")
+    print("  [2] Local Server (Running in another terminal on THIS machine)")
+    
+    conn_choice = input("Select connection mode (1-2): ").strip()
+    
+    if conn_choice == '2':
+        CONNECTION_MODE = 'local'
+        print(f"\n📂 The default local server path is: {LOCAL_SERVER_BASE_DIR}")
+        local_path = input("Press Enter to use default, or type a custom path: ").strip()
+        if local_path: LOCAL_SERVER_BASE_DIR = local_path
+        print(f"✅ Running in LOCAL mode targeting: {LOCAL_SERVER_BASE_DIR}")
+    else:
+        CONNECTION_MODE = 'remote'
+        print(f"✅ Running in REMOTE mode targeting: {SERVER_IP}")
+        
     while True:
         print("\n=== DAFYOLO Smart Client (v6) ===")
         print("1. Sync & Train (Auto-Configured)")

@@ -74,27 +74,16 @@ def detect_label_index_base(label_dir: Path, n_classes: int) -> int:
             if line.strip():
                 used.add(int(line.split()[0]))
     if not used:
-        raise ValueError(f"No labels found in {label_dir} to detect indexing from")
-
+        raise ValueError(f"No labels found in {label_dir}")
     lo, hi = min(used), max(used)
     if lo == 0:
-        # 1-based schemes never produce id 0 -- this is conclusive.
-        return 0
+        return 0   # conclusive: 1-based never produces id 0
     if hi == n_classes:
-        # 0-based ids never reach n_classes -- this is conclusive.
-        print(f"[detect] label ids range {lo}..{hi}, max id equals class count ({n_classes}) -> 1-based, shifting by -1")
-        return 1
-    if hi <= n_classes - 1:
-        print(
-            f"[detect] label ids range {lo}..{hi}: id 0 never appears, but max id {hi} also never reaches "
-            f"{n_classes} -- ambiguous from data alone. Defaulting to standard 0-based. If the wrong classes "
-            f"end up on the wrong nodes after splitting, rerun with --label-index-base 1."
-        )
-        return 0
-    raise ValueError(
-        f"label ids range {lo}..{hi} don't fit {n_classes} classes under 0-based or 1-based indexing. "
-        f"Check classes_list.txt matches your label files, or pass --label-index-base explicitly."
-    )
+        print(f"[detect] ids {lo}..{hi}, max == class count ({n_classes}) → 1-based, shifting -1")
+        return 1   # conclusive: 0-based never reaches n_classes
+    print(f"[detect] ids {lo}..{hi} ambiguous for {n_classes} classes → defaulting 0-based. "
+          f"Rerun with --label-index-base 1 if classes look wrong.")
+    return 0
 
 
 def load_dataset(dataset_dir: Path, drop_names: set[str], label_index_base: str):
@@ -102,26 +91,21 @@ def load_dataset(dataset_dir: Path, drop_names: set[str], label_index_base: str)
     label_dir = dataset_dir / "labels"
     img_dir = dataset_dir / "images"
 
-    if label_index_base == "auto":
-        base = detect_label_index_base(label_dir, len(classes))
-    else:
-        base = int(label_index_base)
+    base = (int(label_index_base)
+            if label_index_base != "auto"
+            else detect_label_index_base(label_dir, len(classes)))
 
     kept_names = [c for c in classes if c.lower() not in drop_names]
     dropped = [c for c in classes if c.lower() in drop_names]
     if dropped:
-        print(f"[load] dropping classes entirely: {dropped}")
-    old_to_new = {classes.index(name): i for i, name in enumerate(kept_names)}  # original idx -> compacted idx
+        print(f"[load] dropping classes: {dropped}")
+    old_to_new = {classes.index(n): i for i, n in enumerate(kept_names)}
 
     images = sorted(p for p in img_dir.iterdir() if p.suffix.lower() in IMG_EXTS)
-
-    # per-image surviving (compacted_cls, rest-of-line) boxes
     image_boxes: dict[Path, list[tuple[int, str]]] = {}
-    class_instance_count = defaultdict(int)
-    class_images = defaultdict(set)
+    class_instance_count: dict[int, int] = defaultdict(int)
+    n_dropped_boxes = n_excluded_images = 0
 
-    n_dropped_boxes = 0
-    n_excluded_images = 0
     for img_path in images:
         label_path = label_dir / (img_path.stem + ".txt")
         boxes = []
@@ -137,17 +121,14 @@ def load_dataset(dataset_dir: Path, drop_names: set[str], label_index_base: str)
                 new_cls = old_to_new[raw_cls]
                 boxes.append((new_cls, " ".join(parts[1:])))
                 class_instance_count[new_cls] += 1
-                class_images[new_cls].add(img_path)
         if boxes:
             image_boxes[img_path] = boxes
         else:
             n_excluded_images += 1
 
-    print(f"[load] {len(images)} images scanned, {len(image_boxes)} kept (have >=1 owned-class box), "
-          f"{n_excluded_images} excluded (only dropped-class or no annotations)")
-    print(f"[load] {n_dropped_boxes} individual boxes dropped (belonged to dropped classes)")
-
-    return kept_names, image_boxes, class_instance_count, class_images
+    print(f"[load] {len(images)} images → {len(image_boxes)} kept, "
+          f"{n_excluded_images} excluded, {n_dropped_boxes} boxes dropped")
+    return kept_names, image_boxes, class_instance_count
 
 
 def assign_classes_to_nodes(kept_names: list[str], class_instance_count: dict, n_nodes: int) -> list[list[int]]:
@@ -183,17 +164,17 @@ def write_node(
     local_id = {gid: i for i, gid in enumerate(owned_compacted_ids)}
     owned_names = [kept_names[gid] for gid in owned_compacted_ids]
 
-    node_images = [img for img, boxes in image_boxes.items() if any(c in owned_set for c, _ in boxes)]
+    node_images = [img for img, boxes in image_boxes.items()
+                   if any(c in owned_set for c, _ in boxes)]
     rng = random.Random(seed)
     rng.shuffle(node_images)
     n_val = max(1, int(len(node_images) * val_frac)) if node_images else 0
     splits = {"val": node_images[:n_val], "train": node_images[n_val:]}
-
-    total_instances = sum(
-        1 for img in node_images for c, _ in image_boxes[img] if c in owned_set
-    )
-    print(f"[node {node_name}] owns={owned_names} images={len(node_images)} "
-          f"(train={len(splits['train'])}, val={len(splits['val'])}) instances={total_instances}")
+    total_inst = sum(1 for img in node_images
+                     for c, _ in image_boxes[img] if c in owned_set)
+    print(f"[node {node_name}] owns={owned_names} | "
+          f"images={len(node_images)} (train={len(splits['train'])}, val={n_val}) | "
+          f"instances={total_inst}")
 
     if dry_run:
         return owned_names
@@ -211,9 +192,8 @@ def write_node(
                     dst_img.symlink_to(img.resolve())
                 except (OSError, NotImplementedError):
                     shutil.copy(img, dst_img)
-            lines = [
-                f"{local_id[c]} {rest}" for c, rest in image_boxes[img] if c in owned_set
-            ]
+            lines = [f"{local_id[c]} {rest}"
+                     for c, rest in image_boxes[img] if c in owned_set]
             (lbl_out / (img.stem + ".txt")).write_text("\n".join(lines))
 
     data_yaml = {
@@ -243,47 +223,86 @@ def main():
     out_root = Path(args.out)
     drop_names = {c.strip().lower() for c in args.drop_classes.split(",") if c.strip()}
 
-    kept_names, image_boxes, class_instance_count, _ = load_dataset(dataset_dir, drop_names, args.label_index_base)
-
-    print(f"[classes] {len(kept_names)} kept classes: {kept_names}")
-    print("[classes] instance counts:", {kept_names[c]: n for c, n in sorted(class_instance_count.items())})
+    kept_names, image_boxes, class_instance_count = load_dataset(
+        dataset_dir, drop_names, args.label_index_base
+    )
+    print(f"[classes] {len(kept_names)} kept: {kept_names}")
+    print("[classes] instance counts:",
+          {kept_names[c]: n for c, n in sorted(class_instance_count.items())})
 
     node_classes = assign_classes_to_nodes(kept_names, class_instance_count, args.n_nodes)
-
     node_names = [f"node_{chr(ord('A') + i)}" for i in range(args.n_nodes)]
+
     nodes_cfg = []
     for name, owned_ids in zip(node_names, node_classes):
         owned_names = write_node(
-            name, owned_ids, kept_names, image_boxes, out_root, args.val_frac, args.seed, args.dry_run
+            name, owned_ids, kept_names, image_boxes,
+            out_root, args.val_frac, args.seed, args.dry_run
         )
-        nodes_cfg.append({"name": name, "data_yaml": str(out_root / name / "data.yaml"), "owned_classes": owned_names})
-
-    covered = sorted({n for node in nodes_cfg for n in node["owned_classes"]})
-    missing = sorted(set(kept_names) - set(covered))
-    if missing:
-        print(f"[WARNING] these classes ended up owned by no node (shouldn't happen): {missing}")
+        nodes_cfg.append({
+            "name": name,
+            "data_yaml": str(out_root / name / "data.yaml"),
+            "owned_classes": owned_names,
+        })
 
     if args.config_out and not args.dry_run:
+        # Write a fully-explicit config so every tunable field is visible
+        # and no field relies on a dataclass default that could silently
+        # produce wrong behaviour if the code is updated later.
         full_cfg = {
             "global_classes": kept_names,
-            "model": {"arch": "yolov8n.yaml", "imgsz": 256},
+            "model": {
+                "arch": "yolov8n.yaml",   # yolov8n/s/m/l/x.yaml — blank init, no pretrain
+                "imgsz": 960,             # >=256 recommended; 640 for real microscopy data
+            },
             "federation": {
-                "rounds": 20,
-                "local_epochs": 5,
+                # ── mode selector ──────────────────────────────────────────
+                "mode": "async",          # "async" or "sync"
+
+                # ── shared (both modes) ────────────────────────────────────
+                "local_epochs": 5,        # epochs per round max_concurrent_nodes: int = 1   # how many nodes may train simultaneously in async mode
+                                    # 1 = sequential execution with async semantics (safe default)
+                                    # >1 = true parallelism; requires enough RAM for N models
+                                    #      simultaneously (each yolov8l at imgsz=960 ≈ 1–2 GB)
+                                    # (sync) / per cycle (async)
                 "batch_size": 8,
                 "lr0": 0.0008,
                 "warmup_steps": 20,
                 "grad_clip": 10.0,
                 "workers": 0,
-                "device": "cpu",
-                "pseudo_label": {"enabled": True, "start_round": 5, "conf_thresh": 0.6, "weight": 0.5},
+                "device": "cuda",          # "cuda" if GPU available
+
+                # ── sync only (ignored when mode: async) ───────────────────
+                "rounds": 5,
+
+                # ── async only (ignored when mode: sync) ───────────────────
+                "async_node_cycles": 15,  # total submissions = n_nodes * async_node_cycles
+                "staleness_alpha": 0.5,   # w = 1 / (1 + alpha * staleness)
+                "max_concurrent_nodes": 1,  # nodes training simultaneously
+                            # 1 = safe default (sequential w/ async semantics)
+                            # increase only if RAM allows N models at once
+
+                # ── live mAP evaluation ────────────────────────────────────
+                # sync:  evaluate every N rounds      (1 = every round)
+                # async: evaluate every N submissions (n_nodes = once per virtual round)
+                "eval_interval": len(nodes_cfg),
+
+                # ── pseudo-labeling ────────────────────────────────────────
+                "pseudo_label": {
+                    "enabled": True,
+                    "start_round": 5,     # round (sync) or cycle index (async)
+                    "conf_thresh": 0.6,
+                    "weight": 0.5,
+                },
             },
             "nodes": nodes_cfg,
             "output_dir": "runs/from_global_federation",
             "seed": 0,
         }
         Path(args.config_out).write_text(yaml.safe_dump(full_cfg, sort_keys=False))
-        print(f"[config] wrote {args.config_out} -- review federation.rounds/local_epochs/imgsz for your real data size")
+        print(f"[config] wrote {args.config_out}")
+        print(f"         review model.arch, model.imgsz, federation.device, and")
+        print(f"         federation.rounds / async_node_cycles before launching.")
 
 
 if __name__ == "__main__":

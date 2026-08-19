@@ -1,0 +1,98 @@
+global_classes:
+- strongili
+- eimeria_spp
+- fasciola
+- eimeria_intricata
+- calicophoron
+- dictyocaulus
+- nematodirus
+- dicrocoelium
+- metastrongili
+- trichuris
+- skrjabinema
+- toxocara
+- strongyloides
+- moniezia_expansa
+- moniezia_benedeni
+- capillaria
+- giardia
+- ascaris
+- ancylostoma
+- trichuris_trichiuria
+model:
+  arch: yolov8n.yaml
+  imgsz: 640
+federation:
+  mode: async
+
+  local_epochs: 1        # was 3 -- now cheap to keep small: optimizer momentum
+                        # persists across cycles (see server.py/client.py), so
+                        # a cycle no longer needs to "re-earn" a warm optimizer
+                        # every time. Total budget matched to centralized below.
+  batch_size: 8
+  lr0: 0.0008
+  warmup_steps: 20
+  grad_clip: 10.0
+  workers: 0
+  device: cuda
+  data_fraction: 1.0    # FULL real dataset per node (node_A ~3.5k, node_B ~5.9k,
+                        # node_C ~2.8k, node_D ~2.0k train images) -- up from the
+                        # 0.15 slice used for the mechanism-check runs.
+
+  rounds: 5              # unused in async mode, kept for schema completeness
+
+  async_node_cycles: 4            # 4 nodes x 4 cycles = 16 submissions
+                                  # total epochs/node = 4 x 1 = 4 (matches
+                                  # centralized's total_epochs below)
+  staleness_alpha: 0.5
+  max_concurrent_nodes: 1        # kept serial -- concurrency=2 + pseudo_label
+                                  # caused a silent multi-hour CUDA hang before;
+                                  # not worth the risk on an unattended long run.
+
+  eval_interval: 4                # once per "virtual round" -> 4 readings across
+                                  # the run (pooled val set is unaffected by
+                                  # data_fraction, so each eval costs the same
+                                  # regardless of the train-side scale-up).
+
+  pseudo_label:
+    enabled: true
+    start_round: 2
+    conf_thresh: 0.6
+    weight: 0.5
+
+nodes:
+- name: node_A
+  data_yaml: data/kfm_250423/node_A/data.yaml
+  owned_classes:
+  - eimeria_spp
+  - calicophoron
+  - trichuris
+  - moniezia_expansa
+- name: node_B
+  data_yaml: data/kfm_250423/node_B/data.yaml
+  owned_classes:
+  - fasciola
+  - metastrongili
+  - moniezia_benedeni
+  - trichuris_trichiuria
+- name: node_C
+  data_yaml: data/kfm_250423/node_C/data.yaml
+  owned_classes:
+  - strongili
+  - eimeria_intricata
+  - dictyocaulus
+  - nematodirus
+  - dicrocoelium
+  - skrjabinema
+  - toxocara
+  - strongyloides
+  - capillaria
+  - giardia
+- name: node_D
+  data_yaml: data/kfm_250423/node_D/data.yaml
+  owned_classes:
+  - ascaris
+  - ancylostoma
+
+output_dir: runs/kfm_250423_fed_260801_full
+seed: 0

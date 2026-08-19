@@ -20,8 +20,8 @@ global_classes:
 - ancylostoma
 - trichuris_trichiuria
 model:
-  arch: yolov8n.yaml
-  imgsz: 1024
+  arch: yolov8s.yaml
+  imgsz: 480
 federation:
   rounds: 20
   local_epochs: 5
@@ -30,7 +30,7 @@ federation:
   warmup_steps: 20
   grad_clip: 10.0
   workers: 0
-  device: cpu
+  device: cuda:0
   pseudo_label:
     enabled: true
     start_round: 5

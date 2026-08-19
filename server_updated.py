@@ -29,7 +29,7 @@ def patched_sppf_init(self, c1, c2, k=5, *args, **kwargs):
 block.C3k2.__init__ = patched_c3k2_init
 block.SPPF.__init__ = patched_sppf_init
 
-BASE_DIR = "/datadrive/DAFYOLO"
+BASE_DIR = "server_node"
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 GLOBAL_MODEL_DIR = os.path.join(BASE_DIR, "global_model")
 ARCHIVE_DIR = os.path.join(GLOBAL_MODEL_DIR, "archive")
@@ -39,7 +39,7 @@ for d in [UPLOAD_DIR, GLOBAL_MODEL_DIR, ARCHIVE_DIR, PROCESSED_DIR]:
     os.makedirs(d, exist_ok=True)
 
 class FLServer:
-    def __init__(self, strategy='yoloinc'):
+    def __init__(self, strategy='fedcon'):
         self.global_model = None
         self.registry = {}
         self.nc = 0
@@ -150,6 +150,25 @@ class FLServer:
         self.total_samples = num_samples
         self._save_model()
 
+    def _normalize_class_weights(self, weights_tensor):
+        """
+        Normalize class-specific weights by L2 norm to account for
+        different activation scales across clients.
+        """
+        if len(weights_tensor.shape) == 1:
+            # Bias vector - normalize by itself
+            norm = torch.norm(weights_tensor, p=2)
+            return weights_tensor / (norm + 1e-8)
+        else:
+            # Weight matrix - normalize per output channel (class)
+            # weights_tensor shape: [out_channels, in_channels, ...]
+            # Reshape to [out_channels, -1] for per-channel normalization
+            original_shape = weights_tensor.shape
+            reshaped = weights_tensor.reshape(original_shape[0], -1)
+            norms = torch.norm(reshaped, p=2, dim=1, keepdim=True)
+            normalized = reshaped / (norms + 1e-8)
+            return normalized.reshape(original_shape)
+
     def merge_client(self, client_weights_path, class_names, num_samples=100):
         print(f"\n--- Processing client containing: {class_names} [{self.strategy.upper()}] ---")
         if self.global_model is None:
@@ -169,25 +188,44 @@ class FLServer:
         global_sd = self.global_model.model.state_dict()
         client_sd = YOLO(client_weights_path).model.state_dict()
         
-        if self.total_samples == 0: self.total_samples = num_samples
-        alpha = num_samples / (self.total_samples + num_samples) if self.strategy == 'yoloinc' else (1.0 / len(self.registry))
-        if self.strategy == 'yoloinc': self.total_samples += num_samples
+        # Initialize total_samples if needed
+        if self.total_samples == 0: 
+            self.total_samples = num_samples
+        
+        # Use proper weighted averaging for ALL strategies (not just YOLOINC)
+        alpha = num_samples / (self.total_samples + num_samples)
+        
+        # Update total for next iteration
+        self.total_samples += num_samples
 
         base_sd = YOLO("yolo26n.pt").model.state_dict() if self.strategy == 'ties' else None
 
         for key in global_sd.keys():
             if key not in client_sd: continue
             
-            # --- 1. CLASSIFICATION HEAD MERGING ---
+            # --- 1. CLASSIFICATION HEAD MERGING (with normalization) ---
             if any(x in key for x in ['cv3.', 'one2one_cv3.']) and ('2.weight' in key or '2.bias' in key):
                 if len(global_sd[key].shape) > 0 and len(client_sd[key].shape) > 0:
                     if global_sd[key].shape[0] == self.nc and client_sd[key].shape[0] == len(class_names):
                         for local_id, c_name in enumerate(class_names):
                             target_id = self.registry[c_name]
+                            
+                            # Normalize client weights by L2 norm
+                            normalized_client_weight = self._normalize_class_weights(
+                                client_sd[key][local_id:local_id+1]
+                            ).squeeze(0)
+                            
                             if self.class_merge_counts[c_name] == 1 or self.strategy in ['fedhead', 'stitch']:
-                                global_sd[key][target_id] = client_sd[key][local_id].clone()
-                            elif self.strategy in ['fedavg', 'yoloinc', 'ties']:
-                                global_sd[key][target_id] = (1 - alpha) * global_sd[key][target_id].float() + alpha * client_sd[key][local_id].float()
+                                global_sd[key][target_id] = normalized_client_weight.clone()
+                            # FedAvg, YOLOINC, TIES, FedCon, YOLO-PA: Standard averaging with normalized weights
+                            elif self.strategy in ['fedavg', 'yoloinc', 'ties', 'fedcon'] or self.strategy.startswith('yolopa_'):
+                                normalized_global_weight = self._normalize_class_weights(
+                                    global_sd[key][target_id:target_id+1]
+                                ).squeeze(0)
+                                global_sd[key][target_id] = (
+                                    (1 - alpha) * normalized_global_weight.float() + 
+                                    alpha * normalized_client_weight.float()
+                                )
                                 
             # --- 2. BACKBONE / NECK MERGING ---
             elif global_sd[key].shape == client_sd[key].shape:
@@ -202,8 +240,9 @@ class FLServer:
                         global_sd[key] = (global_sd[key].float() + alpha * task_vector).to(global_sd[key].dtype)
                     else:
                         global_sd[key] = ((1 - alpha) * global_sd[key].float() + alpha * client_sd[key].float()).to(global_sd[key].dtype)
-                        
-                elif self.strategy in ['fedavg', 'yoloinc']:
+                
+                # FedCon & YOLO-PA utilizes standard averaging for the backbone!
+                elif self.strategy in ['fedavg', 'yoloinc', 'fedcon'] or self.strategy.startswith('yolopa_'):
                     global_sd[key] = ((1 - alpha) * global_sd[key].float() + alpha * client_sd[key].float()).to(global_sd[key].dtype)
 
         self.global_model.model.load_state_dict(global_sd)
@@ -221,7 +260,34 @@ def run_server():
     print("=" * 52)
     print("  🏆 DAFYOLO SERVER (v6 - Multi-Class Support) 🏆")
     print("=" * 52)
-    server = FLServer(strategy='fedhead')
+    print("Select Server Merging Strategy:")
+    print("  [1] FedHead (Head Injection)")
+    print("  [2] Stitch (Zero-Interference Head Stitching)")
+    print("  [3] TIES (Task Vector Trimming)")
+    print("  [4] FedAvg (Standard Averaging)")
+    print("  [5] YOLOINC (Incremental Distillation)")
+    print("  [6] FedCon (Federated Contrastive)")
+    print("  [7] UltraFlwr YOLO-PA (Partial Aggregation) [NEW]")
+    print("  [8] FedProx (Proximal Federated Optimization)")
+    
+    choice = input("\nEnter your choice (1-8): ").strip()
+    strategy_map = {'1': 'fedhead', '2': 'stitch', '3': 'ties', '4': 'fedavg', '5': 'yoloinc', '6': 'fedcon', '8': 'fedprox'}
+    
+    if choice == '7':
+        print("\nSelect YOLO-PA Component(s) to Update:")
+        print("  [a] Backbone (Modules 0-9)")
+        print("  [b] Neck (Modules 10-22)")
+        print("  [c] Head (Module 23)")
+        print("  [d] NeckHead (Modules 10-23)")
+        print("  [e] BackboneHead (Modules 0-9 + 23)")
+        pa_choice = input("Enter choice (a-e): ").strip().lower()
+        pa_map = {'a': 'backbone', 'b': 'neck', 'c': 'head', 'd': 'neckhead', 'e': 'backbonehead'}
+        selected_strategy = f"yolopa_{pa_map.get(pa_choice, 'neckhead')}"
+    else:
+        selected_strategy = strategy_map.get(choice, 'fedcon') # Defaults to fedcon if invalid input
+        
+    server = FLServer(strategy=selected_strategy)
+    print(f"\n🚀 Booting Server with [{selected_strategy.upper()}] strategy...")
     print(f"👀 Watching {UPLOAD_DIR} for incoming uploads or commands...\n")
 
     while True:

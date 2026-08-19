@@ -3,6 +3,14 @@
 Everything about a federation (global class list, model architecture, per-node
 data locations and owned classes, federated hyperparameters) lives in one YAML
 file. See configs/example_federation.yaml for a worked example.
+
+federation.mode controls which server is used:
+  "sync"  — classic FedAvg barrier: all nodes finish round N before
+            the server aggregates and starts round N+1 (FedServer).
+  "async" — each node independently cycles pull→train→push; the server
+            aggregates immediately on every push with a staleness discount
+            (AsyncFedServer). No barrier, no rounds — the global model
+            version increments by 1 after each single-node submission.
 """
 
 from __future__ import annotations
@@ -15,29 +23,68 @@ import yaml
 
 @dataclass
 class ModelConfig:
-    arch: str = "yolov8n.yaml"  # ultralytics architecture yaml -> random (blank) init
+    arch: str = "yolov8n.yaml"  # ultralytics architecture yaml
     imgsz: int = 640
+    pretrained: bool = True     # init SHARED params (backbone/neck/box-head/DFL)
+                                # from arch's official COCO checkpoint (e.g.
+                                # yolov8m.yaml -> yolov8m.pt). The per-class
+                                # head always stays random (nc != COCO's 80).
+                                # Set False to reproduce the original from-
+                                # scratch (fully blank) behavior.
 
 
 @dataclass
 class PseudoLabelConfig:
     enabled: bool = False
-    start_round: int = 5       # don't pseudo-label until the global model is half-decent
-    conf_thresh: float = 0.5   # only trust confident pseudo boxes
-    weight: float = 0.5        # down-weight pseudo-labeled loss vs real ground truth
+    # sync: interpreted as round index; async: interpreted as per-node cycle index
+    start_round: int = 5
+    conf_thresh: float = 0.5
+    weight: float = 0.5
 
 
 @dataclass
 class FederationConfig:
-    rounds: int = 20
-    local_epochs: int = 2
+    # ── selector ──────────────────────────────────────────────────────────────
+    mode: str = "sync"              # "sync" | "async"
+
+    # ── shared by both modes ──────────────────────────────────────────────────
+    local_epochs: int = 5           # epochs per round (sync) or per cycle (async)
     batch_size: int = 8
     lr0: float = 0.001
-    warmup_steps: int = 20     # linear LR warmup at the start of every local round (weights were just reloaded)
-    grad_clip: float = 10.0    # gradient-norm clipping; random-init detectors are prone to early spikes
+    warmup_steps: int = 20          # per-round/cycle LR warmup steps
+    grad_clip: float = 10.0
     workers: int = 0
     device: str = "cpu"
     pseudo_label: PseudoLabelConfig = field(default_factory=PseudoLabelConfig)
+    data_fraction: float = 1.0      # use only the first N% of each node's images (both
+                                    # splits); for fast smoke-tests on a large real dataset
+                                    # without touching the config's node/class layout.
+                                    # 1.0 = full dataset (default, no behaviour change).
+
+    # ── sync only (ignored in async mode) ─────────────────────────────────────
+    rounds: int = 20                # federated rounds; total epochs/node = rounds × local_epochs
+
+    # ── async only (ignored in sync mode) ─────────────────────────────────────
+    async_node_cycles: int = 10     # pull→train→push cycles per node
+                                    # total submissions = n_nodes × async_node_cycles
+                                    # total epochs/node = async_node_cycles × local_epochs
+    staleness_alpha: float = 0.5    # staleness discount: w = 1 / (1 + alpha × staleness)
+                                    # staleness = global_version_now − version_when_node_pulled
+                                    # higher alpha = stronger penalty for stale updates
+    max_concurrent_nodes: int = 1   # how many nodes may train simultaneously — both modes.
+                                    # sync:  caps the round's ProcessPoolExecutor workers
+                                    #        (nodes within a round are independent; the
+                                    #        barrier still waits for all of them either way).
+                                    # async: 1 = sequential execution with async semantics
+                                    #        (safe default); >1 = true parallelism.
+                                    # >1 requires enough RAM/VRAM for N models simultaneously
+                                    # (each yolov8l at imgsz=960 ≈ 1–2 GB).
+
+    # ── live evaluation (both modes) ──────────────────────────────────────────
+    eval_interval: int = 1          # sync:  evaluate every N rounds
+                                    # async: evaluate every N submissions
+                                    #        (default 1 = every submission; set to n_nodes for
+                                    #         one eval per "virtual round" worth of submissions)
 
 
 @dataclass
@@ -48,7 +95,8 @@ class NodeConfig:
 
     def class_id_map(self, global_classes: list[str]) -> dict[int, int]:
         """local label id -> global label id."""
-        return {local_id: global_classes.index(name) for local_id, name in enumerate(self.owned_classes)}
+        return {local_id: global_classes.index(name) 
+        	for local_id, name in enumerate(self.owned_classes)}
 
     def owned_global_ids(self, global_classes: list[str]) -> list[int]:
         return [global_classes.index(name) for name in self.owned_classes]
@@ -76,6 +124,9 @@ def load_config(path: str | Path) -> FedYoloConfig:
     fed_raw = dict(raw.get("federation", {}))
     pl_raw = fed_raw.pop("pseudo_label", {})
     federation = FederationConfig(pseudo_label=PseudoLabelConfig(**pl_raw), **fed_raw)
+    
+    if federation.mode not in ("sync", "async"):
+        raise ValueError(f"federation.mode must be 'sync' or 'async', got '{federation.mode}'")
 
     nodes = [NodeConfig(**n) for n in raw["nodes"]]
 
@@ -96,14 +147,15 @@ def _validate(cfg: FedYoloConfig) -> None:
         for cls in node.owned_classes:
             if cls not in cfg.global_classes:
                 raise ValueError(
-                    f"Node '{node.name}' owns class '{cls}' which is not in global_classes={cfg.global_classes}"
+                    f"Node '{node.name}' owns class '{cls}' which is not in "
+                    f"global_classes={cfg.global_classes}"
                 )
         if len(set(node.owned_classes)) != len(node.owned_classes):
-            raise ValueError(f"Node '{node.name}' lists duplicate owned_classes: {node.owned_classes}")
+            raise ValueError(
+                f"Node '{node.name}' has duplicate owned_classes: {node.owned_classes}"
+            )
 
-    covered = set()
-    for node in cfg.nodes:
-        covered.update(node.owned_classes)
+    covered = {cls for node in cfg.nodes for cls in node.owned_classes}
     missing = set(cfg.global_classes) - covered
     if missing:
         raise ValueError(

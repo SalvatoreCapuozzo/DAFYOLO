@@ -38,7 +38,7 @@ def train_centralized_baseline(cfg: FedYoloConfig) -> dict:
     device = torch.device(cfg.federation.device)
     torch.manual_seed(cfg.seed)
 
-    model = build_model(cfg.model.arch, cfg.nc, cfg.model.imgsz).to(device)
+    model = build_model(cfg.model.arch, cfg.nc, cfg.model.imgsz, pretrained=cfg.model.pretrained).to(device)
     optimizer = torch.optim.SGD(model.parameters(), lr=cfg.federation.lr0, momentum=0.9, weight_decay=5e-4)
 
     node_loaders = [
@@ -46,7 +46,12 @@ def train_centralized_baseline(cfg: FedYoloConfig) -> dict:
         for node in cfg.nodes
     ]
 
-    total_epochs = cfg.federation.rounds * cfg.federation.local_epochs
+    # Match total epochs to whichever mode is active
+    if cfg.federation.mode == "async":
+        total_epochs = cfg.federation.async_node_cycles * cfg.federation.local_epochs
+    else:
+        total_epochs = cfg.federation.rounds * cfg.federation.local_epochs
+        
     step = 0
     for epoch in range(total_epochs):
         log.info(f"=== centralized epoch {epoch + 1}/{total_epochs} ===")
@@ -61,7 +66,9 @@ def train_centralized_baseline(cfg: FedYoloConfig) -> dict:
                 optimizer.zero_grad()
                 loss, _ = model.loss(batch)
                 loss.sum().backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=cfg.federation.grad_clip)
+                torch.nn.utils.clip_grad_norm_(
+                	model.parameters(), max_norm=cfg.federation.grad_clip
+                )
                 optimizer.step()
 
     return {k: v.detach().cpu() for k, v in model.state_dict().items()}

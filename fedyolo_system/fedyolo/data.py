@@ -106,7 +106,7 @@ def build_node_dataset(node: NodeConfig, cfg: FedYoloConfig, split: str = "train
         task="detect",
         classes=None,
         data={"nc": len(local_names), "names": {i: n for i, n in enumerate(local_names)}, "channels": 3},
-        fraction=1.0,
+        fraction=cfg.federation.data_fraction,
         class_id_map=node.class_id_map(cfg.global_classes),
     )
     return dataset
